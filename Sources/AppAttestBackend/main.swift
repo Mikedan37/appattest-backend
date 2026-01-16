@@ -129,63 +129,68 @@ private func encodeLength(_ length: Int) -> Data {
 
 // MARK: - Key Store
 
+/// In-memory key storage for App Attest public keys.
+///
+/// **Why RAM-backed storage:**
+/// - This backend is a minimal validation layer, not a production service
+/// - Eliminates filesystem dependencies and permission issues during development
+/// - Keys are ephemeral and reset on server restart (intentional for testing)
+///
+/// **Production note:** For production deployments, replace with persistent storage:
+/// - Database (PostgreSQL, SQLite, etc.)
+/// - Filesystem with proper permissions
+/// - Key management service (AWS KMS, HashiCorp Vault, etc.)
+///
+/// **Thread safety:** All access is serialized through a DispatchQueue to prevent race conditions.
 struct KeyStore {
-    static let keysDirectory = "/opt/appattest/keys"
+    /// In-memory dictionary: keyID (sanitized) → public key (65 bytes, uncompressed: 0x04 || X || Y)
+    private static var keyStore: [String: Data] = [:]
+    /// Serial queue for thread-safe access to keyStore
+    private static let keyStoreQueue = DispatchQueue(label: "appattest.keystore")
     
     /// Stores public key bytes by keyID to server-side store.
+    /// Registration is idempotent: re-registering the same keyID is allowed.
     /// - Parameters:
     ///   - keyID: The key identifier (base64 string, may contain / or +)
     ///   - publicKey: Raw 65-byte uncompressed public key (0x04 || X || Y)
+    ///   - logger: Logger instance for debug output (optional)
     /// - Returns: true if stored successfully, false otherwise
-    static func storePublicKey(keyID: String, publicKey: Data) -> Bool {
-        // Validate format: must be 65 bytes and start with 0x04
+    static func storePublicKey(keyID: String, publicKey: Data, logger: Logger? = nil) -> Bool {
+        // Validate format: must be 65 bytes (uncompressed P-256: 0x04 || X || Y)
         guard publicKey.count == 65, publicKey[0] == 0x04 else {
+            logger?.warning("Invalid public key format", metadata: [
+                "keyID": "\(keyID)",
+                "length": "\(publicKey.count)",
+                "firstByte": "\(publicKey.first.map { String(format: "0x%02x", $0) } ?? "nil")"
+            ])
             return false
         }
         
-        // Sanitize keyID for filesystem (replace invalid chars with safe alternatives)
-        // Base64 can contain: A-Z, a-z, 0-9, +, /, =
-        // Filesystem-safe: A-Z, a-z, 0-9, -, _
+        // Sanitize keyID (for consistency, though not needed for in-memory storage)
         let sanitizedKeyID = keyID
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "=", with: "")
         
-        // Ensure directory exists with proper permissions
-        let fileManager = FileManager.default
-        do {
-            if !fileManager.fileExists(atPath: keysDirectory) {
-                try fileManager.createDirectory(atPath: keysDirectory, withIntermediateDirectories: true, attributes: [
-                    .posixPermissions: 0o700
-                ])
+        // Store in memory (thread-safe, idempotent)
+        return keyStoreQueue.sync {
+            // Idempotency: re-registering the same keyID with the same public key is allowed
+            if let existingKey = keyStore[sanitizedKeyID] {
+                if existingKey == publicKey {
+                    // Same key, same keyID - idempotent operation succeeds
+                    return true
+                } else {
+                    // Key rotation: different public key for same keyID (overwrite)
+                    logger?.info("Key rotation detected", metadata: ["keyID": "\(sanitizedKeyID)"])
+                }
             }
-        } catch {
-            // Directory creation failed - log and return false
-            print("ERROR: Failed to create keys directory: \(error)")
-            return false
-        }
-        
-        let keyPath = "\(keysDirectory)/\(sanitizedKeyID).pub"
-        let keyBase64 = publicKey.base64EncodedString()
-        
-        guard let keyData = keyBase64.data(using: .utf8) else {
-            print("ERROR: Failed to encode public key as UTF-8")
-            return false
-        }
-        
-        do {
-            // Use atomic write to prevent corruption
-            try keyData.write(to: URL(fileURLWithPath: keyPath), options: [.atomic])
+            
+            keyStore[sanitizedKeyID] = publicKey
+            logger?.info("Public key stored", metadata: [
+                "keyID": "\(sanitizedKeyID)",
+                "totalKeys": "\(keyStore.count)"
+            ])
             return true
-        } catch {
-            // Log the actual error for debugging
-            let currentUser = ProcessInfo.processInfo.environment["USER"] ?? "unknown"
-            print("ERROR: Failed to write key file '\(keyPath)': \(error)")
-            print("  - Directory exists: \(fileManager.fileExists(atPath: keysDirectory))")
-            print("  - Directory writable: \(fileManager.isWritableFile(atPath: keysDirectory))")
-            print("  - Current user: \(currentUser)")
-            print("  - Sanitized keyID: \(sanitizedKeyID)")
-            return false
         }
     }
     
@@ -199,20 +204,19 @@ struct KeyStore {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "=", with: "")
         
-        let keyPath = "\(keysDirectory)/\(sanitizedKeyID).pub"
-        
-        guard let keyData = try? Data(contentsOf: URL(fileURLWithPath: keyPath)),
-              let keyBase64 = String(data: keyData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              let publicKey = Data(base64Encoded: keyBase64) else {
-            return nil
+        // Retrieve from memory (thread-safe)
+        return keyStoreQueue.sync {
+            guard let publicKey = keyStore[sanitizedKeyID] else {
+                return nil
+            }
+            
+            // Validate format: must be 65 bytes and start with 0x04
+            guard publicKey.count == 65, publicKey[0] == 0x04 else {
+                return nil
+            }
+            
+            return publicKey
         }
-        
-        // Validate format: must be 65 bytes and start with 0x04
-        guard publicKey.count == 65, publicKey[0] == 0x04 else {
-            return nil
-        }
-        
-        return publicKey
     }
 }
 
@@ -284,7 +288,7 @@ enum AppAttestBackend {
             }
             
             // 6. Store keyID → publicKey mapping
-            guard KeyStore.storePublicKey(keyID: registerReq.keyID, publicKey: publicKeyData) else {
+            guard KeyStore.storePublicKey(keyID: registerReq.keyID, publicKey: publicKeyData, logger: logger) else {
                 logger.warning("Failed to store public key", metadata: ["keyID": "\(registerReq.keyID)"])
                 return RegisterResponse(
                     status: "rejected",
@@ -334,27 +338,29 @@ enum AppAttestBackend {
                 )
             }
             
-            // Log assertion structure for debugging
-            logger.info("Received assertion", metadata: [
+            // Debug logging (metadata only, no private material)
+            #if DEBUG
+            logger.debug("Received assertion", metadata: [
                 "keyID": "\(verifyReq.keyID)",
                 "assertionLength": "\(assertionObject.count)",
-                "firstBytes": "\(assertionObject.prefix(10).map { String(format: "%02x", $0) }.joined(separator: " "))"
+                "clientDataHashLength": "\(clientDataHash.count)"
             ])
+            #endif
             
-            // CRITICAL: Log exact bytes being used for verification
-            // These must match exactly what was used during assertion generation
-            let clientDataHashHex = clientDataHash.map { String(format: "%02x", $0) }.joined()
-            logger.info("Byte fidelity check", metadata: [
-                "keyID": "\(verifyReq.keyID)",
-                "clientDataHashLength": "\(clientDataHash.count)",
-                "clientDataHashHex": "\(clientDataHashHex)",
-                "clientDataHashBase64": "\(verifyReq.clientDataHash)"
-            ])
-            
-            // 3. Decode App Attest assertion (CBOR map, not COSE_Sign1)
+            // 3. Decode App Attest assertion (CBOR map, NOT COSE_Sign1)
+            //
+            // **Critical protocol detail:**
             // App Attest assertions are CBOR maps: { "authenticatorData": <bytes>, "signature": <bytes> }
-            // NOT COSE_Sign1 arrays: [ protected, unprotected, payload, signature ]
-            // Apple deliberately uses maps so servers must reconstruct Sig_structure server-side
+            // They are NOT raw COSE_Sign1 arrays: [ protected, unprotected, payload, signature ]
+            //
+            // **Why Apple uses maps instead of COSE_Sign1:**
+            // - Forces servers to reconstruct the signed bytes server-side
+            // - Prevents clients from lying about the payload
+            // - Maintains strict trust boundaries (server is the authority)
+            //
+            // **What this means:**
+            // The backend must extract authenticatorData and signature, then reconstruct
+            // the exact bytes Apple signed: authenticatorData || clientDataHash
             let authenticatorData: Data
             let signature: Data
             
@@ -402,35 +408,47 @@ enum AppAttestBackend {
                 )
             }
             
-            // 4. Construct signedBytes for App Attest verification
-            // App Attest signs over raw concatenation: authenticatorData || clientDataHash
-            // NOT a CBOR-wrapped COSE Sig_structure. Apple signs the raw bytes directly.
-            // CRITICAL: Use EXACT bytes as received - do NOT recompute, rehash, or modify
+            // 4. Construct the exact bytes Apple signed (raw payload)
+            //
+            // **App Attest signature payload:**
+            // Apple signs over raw concatenation: authenticatorData || clientDataHash
+            // This is NOT a CBOR-wrapped COSE Sig_structure.
+            //
+            // **Why NOT CBOR Sig_structure:**
+            // COSE defines Sig_structure as: ["Signature1", protected_headers, external_aad, payload]
+            // App Attest deliberately avoids this format to force server-side reconstruction.
+            // The server must verify against the exact bytes Apple signed, not a wrapped structure.
+            //
+            // **CRITICAL:** Use EXACT bytes as received - do NOT:
+            // - Recompute clientDataHash (use the exact bytes from the request)
+            // - Rehash the payload (CryptoKit will hash internally)
+            // - Modify or normalize any bytes
             let payload = authenticatorData + clientDataHash
             
-            // Compute payload hash for logging
+            // Debug logging (payload metadata only, no private material)
+            #if DEBUG
             let payloadHash = SHA256.hash(data: payload)
             let payloadHashHex = payloadHash.map { String(format: "%02x", $0) }.joined()
-            
-            // Log payload for verification
-            logger.info("App Attest signed bytes", metadata: [
+            logger.debug("App Attest payload construction", metadata: [
                 "keyID": "\(verifyReq.keyID)",
                 "authenticatorDataLength": "\(authenticatorData.count)",
                 "clientDataHashLength": "\(clientDataHash.count)",
                 "payloadLength": "\(payload.count)",
-                "payloadHash": "\(payloadHashHex)",
-                "authenticatorDataFirst16": "\(authenticatorData.prefix(16).map { String(format: "%02x", $0) }.joined())",
-                "clientDataHashHex": "\(clientDataHash.map { String(format: "%02x", $0) }.joined())"
+                "payloadHash": "\(payloadHashHex)"
             ])
+            #endif
             
-            // For App Attest, the validator should hash the raw payload (what Apple signed)
-            // Not a CBOR-wrapped structure
+            // Pass raw payload to validator (CryptoKit will hash it internally)
             let sigStructure = payload
             
-            // Convert signature to ASN.1 DER format
-            // App Attest signatures can be either:
-            //  1. Raw ES256: 64 bytes (32 bytes r + 32 bytes s) → convert to DER
-            //  2. ASN.1 DER: variable length (70-72 bytes), starts with 0x30 → use as-is
+            // 5. Normalize signature to ASN.1 DER format
+            //
+            // **Signature format handling:**
+            // App Attest signatures can arrive in two formats:
+            //   1. Raw ES256: 64 bytes (32 bytes r || 32 bytes s) → convert to DER
+            //   2. ASN.1 DER: variable length (70-72 bytes), starts with 0x30 → use as-is
+            //
+            // CryptoKit requires ASN.1 DER format, so we normalize here.
             let signatureDER: Data
             
             if signature.count == 64 {
@@ -478,33 +496,7 @@ enum AppAttestBackend {
                 )
             }
             
-            // Helper to convert Data to hex string
-            func hex(_ data: Data) -> String {
-                data.map { String(format: "%02x", $0) }.joined()
-            }
-            
-            // CRITICAL: Log exact bytes used for verification (autopsy logging)
-            // This will reveal any byte-level mismatches
-            print("=== VERIFICATION BYTES (AUTOPSY) ===")
-            print("authenticatorData: \(hex(authenticatorData))")
-            print("clientDataHash: \(hex(clientDataHash))")
-            print("payload: \(hex(payload))")
-            print("sigStructure: \(hex(sigStructure))")
-            print("signature (raw): \(hex(signature))")
-            print("signatureDER: \(hex(signatureDER))")
-            print("publicKeyRaw: \(hex(publicKeyData))")
-            print("authenticatorData length: \(authenticatorData.count)")
-            print("clientDataHash length: \(clientDataHash.count)")
-            print("payload length: \(payload.count)")
-            print("sigStructure length: \(sigStructure.count)")
-            print("signature length: \(signature.count)")
-            print("signatureDER length: \(signatureDER.count)")
-            print("publicKeyRaw length: \(publicKeyData.count)")
-            print("payload hash: \(payloadHashHex)")
-            print("sigStructure (raw payload) first 16 bytes: \(hex(sigStructure.prefix(16)))")
-            print("=====================================")
-            
-            // 5. Create AssertionValidationContext
+            // 6. Create validation context
             let context: AssertionValidationContext
             do {
                 context = try AssertionValidationContext(
@@ -515,43 +507,47 @@ enum AppAttestBackend {
             } catch {
                 logger.warning("Failed to create validation context", metadata: [
                     "keyID": "\(verifyReq.keyID)",
-                    "payloadHash": "\(payloadHashHex)"
+                    "error": "\(error.localizedDescription)"
                 ])
                 return VerifyResponse(
                     status: "rejected",
-                    reason: "Invalid validation context"
+                    reason: "Invalid validation context: \(error.localizedDescription)"
                 )
             }
             
-            // 6. Call AssertionValidator.validate(context:)
+            // 7. Perform cryptographic verification
+            //
+            // **Verification process:**
+            // - AssertionValidator receives raw payload bytes (sigStructure)
+            // - CryptoKit's isValidSignature(_:for: Data) hashes the payload internally
+            // - ECDSA signature is verified against the public key
+            // - No double-hashing: we pass raw bytes, CryptoKit does the SHA256
             let validationResult = AssertionValidator.validate(context)
             
-            // 7. Decision Logic (trust decisions happen here, not in validator)
+            // 8. Return verification result (no policy checks, pure crypto result)
             switch validationResult {
             case .verified:
                 logger.info("Assertion verified", metadata: [
-                    "keyID": "\(verifyReq.keyID)",
-                    "payloadHash": "\(payloadHashHex)"
+                    "keyID": "\(verifyReq.keyID)"
                 ])
                 return VerifyResponse(
                     status: "verified",
                     reason: nil
                 )
                 
-            case .failed:
-                logger.info("Assertion rejected: signature invalid", metadata: [
+            case .failed(let reason):
+                logger.warning("Assertion rejected", metadata: [
                     "keyID": "\(verifyReq.keyID)",
-                    "payloadHash": "\(payloadHashHex)"
+                    "reason": "\(reason)"
                 ])
                 return VerifyResponse(
                     status: "rejected",
-                    reason: "signature invalid"
+                    reason: reason
                 )
                 
             case .cannotValidate(let reason):
-                logger.info("Assertion rejected: cannot validate", metadata: [
+                logger.warning("Assertion cannot be validated", metadata: [
                     "keyID": "\(verifyReq.keyID)",
-                    "payloadHash": "\(payloadHashHex)",
                     "reason": "\(reason)"
                 ])
                 return VerifyResponse(
