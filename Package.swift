@@ -25,5 +25,12 @@ let package = Package(
                 .product(name: "AppAttestValidator", package: "AppAttestValidator")
             ]
         ),
+        .testTarget(
+            name: "AppAttestBackendTests",
+            dependencies: [
+                .target(name: "AppAttestBackend"),
+                .product(name: "XCTVapor", package: "vapor")
+            ]
+        ),
     ]
 )
