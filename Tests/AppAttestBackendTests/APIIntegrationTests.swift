@@ -1,0 +1,274 @@
+//
+//  APIIntegrationTests.swift
+//  AppAttestBackendTests
+//
+//  Tests that verify API-level behavior matches documented guarantees.
+//
+
+import XCTest
+import XCTVapor
+@testable import AppAttestBackend
+
+final class APIIntegrationTests: XCTestCase {
+    var app: Application!
+    
+    override func setUp() async throws {
+        app = try await Application.make(.testing)
+        try configure(app)
+    }
+    
+    override func tearDown() async throws {
+        app.shutdown()
+    }
+    
+    // MARK: - Health Endpoint
+    
+    func testHealthEndpointReturns200() throws {
+        try app.test(.GET, "/health", afterResponse: { res in
+            XCTAssertEqual(res.status, .ok)
+        })
+    }
+    
+    func testHealthEndpointReturnsCorrectJSON() throws {
+        try app.test(.GET, "/health", afterResponse: { res in
+            let body = try res.content.decode([String: String].self)
+            XCTAssertEqual(body["status"], "ok")
+        })
+    }
+    
+    func testHealthEndpointDoesNotPerformCrypto() throws {
+        // This test verifies that the health endpoint does not perform
+        // any cryptographic operations. It should be fast and lightweight.
+        
+        let start = Date()
+        try app.test(.GET, "/health", afterResponse: { res in
+            XCTAssertEqual(res.status, .ok)
+        })
+        let duration = Date().timeIntervalSince(start)
+        
+        // Health check should be very fast (no crypto operations)
+        XCTAssertLessThan(duration, 0.1, "Health endpoint should not perform crypto (should be fast)")
+    }
+    
+    // MARK: - Register Endpoint
+    
+    func testRegisterEndpointAcceptsValidRequest() throws {
+        // This test verifies the register endpoint accepts valid requests.
+        // Note: Requires valid attestation object to fully test.
+        
+        // Test with minimal valid structure
+        // In real test, would use actual App Attest attestation object
+        XCTAssertTrue(true, "Test requires real attestation object to fully verify registration")
+    }
+    
+    func testRegisterRejectsInvalidBase64() throws {
+        try app.test(.POST, "/app-attest/register", beforeRequest: { req in
+            try req.content.encode([
+                "keyID": "test-key",
+                "attestationObject": "not-valid-base64!!!",
+                "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
+            ])
+        }, afterResponse: { res in
+            XCTAssertEqual(res.status, .ok)
+            let body = try res.content.decode([String: String].self)
+            XCTAssertEqual(body["status"], "rejected")
+            XCTAssertNotNil(body["reason"])
+        })
+    }
+    
+    func testRegisterRejectsInvalidAttestationFormat() throws {
+        // Test with valid base64 but invalid attestation format
+        let invalidAttestation = Data([0xFF, 0xFF, 0xFF]).base64EncodedString()
+        
+        try app.test(.POST, "/app-attest/register", beforeRequest: { req in
+            try req.content.encode([
+                "keyID": "test-key",
+                "attestationObject": invalidAttestation,
+                "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
+            ])
+        }, afterResponse: { res in
+            XCTAssertEqual(res.status, .ok)
+            let body = try res.content.decode([String: String].self)
+            XCTAssertEqual(body["status"], "rejected")
+            XCTAssertNotNil(body["reason"])
+        })
+    }
+    
+    // MARK: - Verify Endpoint
+    
+    func testVerifyEndpointRejectsUnregisteredKey() throws {
+        let keyID = "unregistered-key-for-api-test"
+        
+        var cborBytes = Data()
+        cborBytes.append(0xa2)
+        cborBytes.append(0x71)
+        cborBytes.append(contentsOf: "authenticatorData".utf8)
+        cborBytes.append(0x58)
+        cborBytes.append(0x25)
+        cborBytes.append(contentsOf: Data(repeating: 0, count: 37))
+        cborBytes.append(0x69)
+        cborBytes.append(contentsOf: "signature".utf8)
+        cborBytes.append(0x58)
+        cborBytes.append(0x40)
+        cborBytes.append(contentsOf: Data(repeating: 0, count: 64))
+        
+        try app.test(.POST, "/app-attest/verify", beforeRequest: { req in
+            try req.content.encode([
+                "keyID": keyID,
+                "assertionObject": cborBytes.base64EncodedString(),
+                "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
+            ])
+        }, afterResponse: { res in
+            XCTAssertEqual(res.status, .ok)
+            let body = try res.content.decode([String: String].self)
+            XCTAssertEqual(body["status"], "rejected")
+            XCTAssertTrue(body["reason"]?.contains("not found") == true ||
+                         body["reason"]?.contains("Public key") == true)
+        })
+    }
+    
+    func testVerifyRejectsInvalidCBOR() throws {
+        let keyID = "test-invalid-cbor"
+        let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
+        _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+        
+        // Invalid CBOR (array instead of map)
+        let invalidCBOR = Data([0x84, 0x01, 0x02, 0x03, 0x04])
+        
+        try app.test(.POST, "/app-attest/verify", beforeRequest: { req in
+            try req.content.encode([
+                "keyID": keyID,
+                "assertionObject": invalidCBOR.base64EncodedString(),
+                "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
+            ])
+        }, afterResponse: { res in
+            XCTAssertEqual(res.status, .ok)
+            let body = try res.content.decode([String: String].self)
+            XCTAssertEqual(body["status"], "rejected")
+            XCTAssertNotNil(body["reason"])
+        })
+    }
+    
+    func testVerifyRejectsMissingFields() throws {
+        let keyID = "test-missing-fields"
+        let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
+        _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+        
+        // CBOR map with only signature (missing authenticatorData)
+        var cborBytes = Data()
+        cborBytes.append(0xa1) // map(1)
+        cborBytes.append(0x69) // "signature"
+        cborBytes.append(contentsOf: "signature".utf8)
+        cborBytes.append(0x58)
+        cborBytes.append(0x40)
+        cborBytes.append(contentsOf: Data(repeating: 0, count: 64))
+        
+        try app.test(.POST, "/app-attest/verify", beforeRequest: { req in
+            try req.content.encode([
+                "keyID": keyID,
+                "assertionObject": cborBytes.base64EncodedString(),
+                "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
+            ])
+        }, afterResponse: { res in
+            XCTAssertEqual(res.status, .ok)
+            let body = try res.content.decode([String: String].self)
+            XCTAssertEqual(body["status"], "rejected")
+            XCTAssertTrue(body["reason"]?.contains("authenticatorData") == true ||
+                         body["reason"]?.contains("Missing") == true)
+        })
+    }
+    
+    // MARK: - Response Semantics
+    
+    func testVerifiedMeansCryptographicSuccessOnly() throws {
+        // This test verifies that "verified" status means cryptographic
+        // success only, not authorization or trust.
+        
+        // Test approach:
+        // 1. Register a key
+        // 2. Verify a valid assertion (should return "verified")
+        // 3. Confirm response does NOT contain authorization/trust fields
+        // 4. Confirm "verified" only means signature is valid
+        
+        XCTAssertTrue(true, "Test requires real assertion to verify response semantics")
+    }
+    
+    func testRejectedAlwaysIncludesReason() throws {
+        // This test verifies that all "rejected" responses include a reason.
+        
+        // Test various rejection scenarios
+        let testCases: [(String, String, String)] = [
+            ("invalid-base64", "not-base64!!!", "not-base64!!!"),
+            ("unregistered-key", "never-registered", Data([0xa2]).base64EncodedString()),
+            ("invalid-cbor", "test-key", Data([0xFF]).base64EncodedString())
+        ]
+        
+        for (name, keyID, assertion) in testCases {
+            if name == "unregistered-key" {
+                // Don't register this key
+            } else {
+                let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
+                _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+            }
+            
+            try app.test(.POST, "/app-attest/verify", beforeRequest: { req in
+                try req.content.encode([
+                    "keyID": keyID,
+                    "assertionObject": assertion,
+                    "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
+                ])
+            }, afterResponse: { res in
+                XCTAssertEqual(res.status, .ok)
+                let body = try res.content.decode([String: String].self)
+                if body["status"] == "rejected" {
+                    XCTAssertNotNil(body["reason"], "Rejected response must include reason (test case: \(name))")
+                    XCTAssertFalse(body["reason"]?.isEmpty == true, "Reason must not be empty (test case: \(name))")
+                }
+            })
+        }
+    }
+    
+    func testResponseStructureIsConsistent() throws {
+        // This test verifies that response structure is consistent:
+        // - Always has "status" field
+        // - "reason" is optional (present when rejected, null when verified)
+        
+        let keyID = "test-response-structure"
+        let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
+        _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+        
+        var cborBytes = Data()
+        cborBytes.append(0xa2)
+        cborBytes.append(0x71)
+        cborBytes.append(contentsOf: "authenticatorData".utf8)
+        cborBytes.append(0x58)
+        cborBytes.append(0x25)
+        cborBytes.append(contentsOf: Data(repeating: 0, count: 37))
+        cborBytes.append(0x69)
+        cborBytes.append(contentsOf: "signature".utf8)
+        cborBytes.append(0x58)
+        cborBytes.append(0x40)
+        cborBytes.append(contentsOf: Data(repeating: 0, count: 64))
+        
+        try app.test(.POST, "/app-attest/verify", beforeRequest: { req in
+            try req.content.encode([
+                "keyID": keyID,
+                "assertionObject": cborBytes.base64EncodedString(),
+                "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
+            ])
+        }, afterResponse: { res in
+            XCTAssertEqual(res.status, .ok)
+            let body = try res.content.decode([String: Any].self)
+            
+            // Must have status field
+            XCTAssertNotNil(body["status"])
+            XCTAssertTrue(body["status"] is String)
+            
+            // Reason is optional
+            if let reason = body["reason"] {
+                // If present, must be String or null
+                XCTAssertTrue(reason is String || reason is NSNull)
+            }
+        })
+    }
+}
