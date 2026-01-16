@@ -2,7 +2,7 @@
 
 ## Test Checklist
 
-### ✅ Test 1: Health Check
+### Test 1: Health Check
 **Command:**
 ```bash
 curl http://127.0.0.1:8080/health
@@ -13,7 +13,7 @@ curl http://127.0.0.1:8080/health
 { "status": "ok" }
 ```
 
-**Status:** ✅ Passed
+**Status:** Passed
 
 **Notes:**
 - Backend running on Orange Pi
@@ -22,7 +22,7 @@ curl http://127.0.0.1:8080/health
 
 ---
 
-### ✅ Test 2: Real Assertion Verification
+### Test 2: Real Assertion Verification
 **Prerequisites:**
 - Real iOS-generated assertion object
 - Public key stored at `/opt/appattest/keys/<keyID>.pub`
@@ -49,14 +49,14 @@ curl -X POST http://127.0.0.1:8080/app-attest/verify \
 { "status": "verified" }
 ```
 
-**Status:** ⬜ Not Run | ✅ Passed | ❌ Failed
+**Status:** Not Run | Passed | Failed
 
 **Notes:**
 _Record actual response, keyID used, and any issues_
 
 ---
 
-### ✅ Test 3: Tamper Detection
+### Test 3: Tamper Detection
 **Test:** Flip ONE byte in assertionObject and verify rejection
 
 **Method:**
@@ -82,7 +82,7 @@ curl -X POST http://127.0.0.1:8080/app-attest/verify \
 { "status": "rejected", "reason": "..." }
 ```
 
-**Status:** ⬜ Not Run | ✅ Passed | ❌ Failed
+**Status:** Not Run | Passed | Failed
 
 **Notes:**
 _Record which byte was flipped, actual response, and rejection reason_
@@ -170,16 +170,16 @@ sha256sum Sources/AppAttestValidator/AssertionValidator.swift
 ## Completion Criteria
 
 All three tests must pass:
-- ✅ Health check returns `{"status":"ok"}`
-- ✅ Real assertion returns `{"status":"verified"}`
-- ✅ Tampered assertion returns `{"status":"rejected"}`
+- Health check returns `{"status":"ok"}`
+- Real assertion returns `{"status":"verified"}`
+- Tampered assertion returns `{"status":"rejected"}`
 
 **When all pass:**
-- ✅ Stop testing
-- ✅ Do not refactor
-- ✅ Do not optimize
-- ✅ Document results
-- ✅ Close editor
+- Stop testing
+- Do not refactor
+- Do not optimize
+- Document results
+- Close editor
 
 ---
 

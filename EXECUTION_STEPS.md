@@ -1,6 +1,6 @@
 # Execution Steps - App Attest Backend Verification
 
-## Status: ✅ Backend Wired and Ready
+## Status: Backend Wired and Ready
 
 The backend is built, wired to real APIs, and ready for execution.
 
@@ -119,10 +119,10 @@ curl http://10.0.0.108:8080/health
 ```
 
 **If this happens, you've proven:**
-- ✅ No replay attacks
-- ✅ No forgery
-- ✅ No silent acceptance
-- ✅ No reconstruction bugs
+- No replay attacks
+- No forgery
+- No silent acceptance
+- No reconstruction bugs
 
 **This is the moment you stop doubting it.**
 
@@ -133,13 +133,13 @@ curl http://10.0.0.108:8080/health
 **Seriously. This is important.**
 
 **Do not:**
-- ❌ Refactor
-- ❌ "Clean up"
-- ❌ Abstract
-- ❌ Optimize
-- ❌ Turn validator into a service
-- ❌ Add CAPTCHA logic yet
-- ❌ Chase warnings
+- Refactor
+- "Clean up"
+- Abstract
+- Optimize
+- Turn validator into a service
+- Add CAPTCHA logic yet
+- Chase warnings
 
 **This is infrastructure, not a product surface.**
 
@@ -167,8 +167,8 @@ curl http://10.0.0.108:8080/health
 **You built a trust primitive.**
 
 **Once you see:**
-- ✅ Verified (real assertion)
-- ❌ Rejected (tampered assertion)
+- Verified (real assertion)
+- Rejected (tampered assertion)
 
 **You're done.**
 

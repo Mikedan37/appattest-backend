@@ -169,11 +169,11 @@ swift run -c release AppAttestBackend
 ## When you stop testing
 
 You stop when all of these are true:
-- ✅ Tests pass
-- ✅ Health endpoint responds
-- ✅ Real assertion verifies
-- ✅ One-byte tamper fails
-- ✅ Restart wipes keys
+- Tests pass
+- Health endpoint responds
+- Real assertion verifies
+- One-byte tamper fails
+- Restart wipes keys
 
 At that point, the system is closed.
 
