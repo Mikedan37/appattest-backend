@@ -2,7 +2,7 @@
 
 A backend service that verifies Apple App Attest assertions.
 
-This repository contains a small, standalone implementation used to decode App Attest assertions and verify their signatures correctly. It exists to make the verification behavior explicit and inspectable.
+This repository records a specific verification behavior and the code required to reproduce it.
 
 This is an independent implementation. It is not official, not endorsed, and not intended to represent best practices beyond the specific behavior it implements.
 
@@ -15,16 +15,19 @@ The service performs three steps:
 
 That is the entire scope.
 
-## What Motivated This
+## Notes
 
-While implementing App Attest verification, several failure modes were encountered that were not obvious from documentation or examples:
-- Verifying a CBOR Sig_structure instead of the actual signed bytes
-- Hashing input more than once before signature verification
-- Mixing protocol decoding, verification, and policy decisions
-- Relying on WebAuthn assumptions that do not apply to App Attest
-- Making it unclear what bytes were actually verified
+This repository documents one concrete verification behavior observed while implementing App Attest:
 
-This repository exists to isolate the verification step and make it clear what is being checked.
+- The assertion signature verifies over the byte sequence:
+  ```
+  authenticatorData || clientDataHash
+  ```
+
+Several verification approaches were evaluated.
+Only one produced a valid signature verification in this implementation.
+
+The code isolates this behavior so it can be inspected, tested, and reproduced.
 
 ## Verification Behavior
 
@@ -44,13 +47,11 @@ No additional interpretation is applied.
 
 This service verifies cryptographic validity only.
 
-It does not attempt to answer whether:
-- A device should be trusted
-- A request should be allowed
-- A user is authenticated
-- An assertion is fresh or unique
-
-Those decisions are intentionally out of scope.
+It does not answer:
+- Whether a device should be trusted
+- Whether a request should be allowed
+- Whether a user is authenticated
+- Whether an assertion is fresh or unique
 
 ### What the Service Provides
 - Signature verification for App Attest assertions
@@ -67,8 +68,6 @@ Those decisions are intentionally out of scope.
 - Key rotation or revocation
 - High availability
 - Persistent storage guarantees
-
-Any of the above must be implemented elsewhere.
 
 ## Architecture Overview
 
@@ -201,7 +200,7 @@ curl -X POST http://10.0.0.108:8080/app-attest/verify \
 }
 ```
 
-This means: The signature is cryptographically valid. The assertion was signed by the private key corresponding to the stored public key for this `keyID`, over the exact bytes `authenticatorData || clientDataHash`.
+The signature is cryptographically valid. The assertion was signed by the private key corresponding to the stored public key for this `keyID`, over the exact bytes `authenticatorData || clientDataHash`.
 
 **Failure Response:**
 ```json
@@ -219,13 +218,11 @@ This means: The signature is cryptographically valid. The assertion was signed b
 - Signature does not verify (tampering detected or wrong bytes)
 - Invalid signature format
 
-**Important**: A `verified` response means cryptographic correctness only. It does NOT mean:
+A `verified` response indicates cryptographic correctness only. It does not indicate:
 - The request is authorized
 - The device is trusted
 - The user is authenticated
 - The assertion is fresh (not replayed)
-
-These concerns must be handled by your application logic or middleware.
 
 ## Key Store
 
