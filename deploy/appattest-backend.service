@@ -1,0 +1,20 @@
+[Unit]
+Description=AppAttest Backend Service
+After=network.target
+
+[Service]
+Type=simple
+User=orangepi
+WorkingDirectory=/opt/appattest-backend
+ExecStart=/opt/appattest-backend/scripts/orangepi_run.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=appattest-backend
+
+# Security: Run as non-root user
+# The service binds to 0.0.0.0:8080 - restrict via firewall if needed
+
+[Install]
+WantedBy=multi-user.target
