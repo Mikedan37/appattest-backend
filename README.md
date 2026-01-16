@@ -1,13 +1,39 @@
 # AppAttest Backend Service
 
-Vapor backend service for App Attest assertion verification. Integrates AppAttestDecoder and AppAttestValidator as Swift Package dependencies.
+A minimal, specification-correct backend for verifying Apple App Attest assertions.
+
+This backend does exactly three things, deliberately and transparently:
+1. Decodes App Attest assertion objects
+2. Reconstructs the exact bytes Apple signed
+3. Performs pure cryptographic verification with no policy or storage assumptions baked in
+
+Nothing more. Nothing hidden.
+
+## Why This Exists
+
+Most App Attest backends are wrong in at least one of these ways:
+- They verify the wrong payload (CBOR Sig_structure instead of raw concatenation)
+- They accidentally double-hash before signature verification
+- They mix protocol parsing with policy decisions
+- They rely on undocumented behavior or cargo-culted WebAuthn code
+- They make it impossible to audit what is actually being verified
+
+This backend explicitly avoids all of that.
+
+**Concrete value:**
+- **Spec correctness**: Verifies `authenticatorData || clientDataHash`, which is what Apple actually signs
+- **Cryptographic clarity**: Single ES256 verification, no hidden hashing, no opaque helpers
+- **Separation of concerns**: Decoder parses, validator verifies, storage is replaceable
+- **Auditability**: Designed so a security engineer can answer "What exact bytes are signed, and why?"
 
 ## Architecture
 
-- **Single endpoint**: `POST /app-attest/verify`
-- **Decoder**: Parses assertion objects and reconstructs Sig_structure (server-side, single source of truth)
-- **Validator**: Pure cryptographic signature verification
-- **Key Store**: Server-side public key lookup by keyID
+- **Endpoints**: 
+  - `POST /app-attest/register` - Register public keys from attestation objects
+  - `POST /app-attest/verify` - Verify assertion signatures
+- **Decoder**: Parses assertion objects and extracts `authenticatorData` and `signature`
+- **Validator**: Verifies the raw payload (`authenticatorData || clientDataHash`) exactly as signed by Apple
+- **Key Store**: Server-side public key lookup by keyID (RAM-backed by default, replaceable)
 
 ## Setup
 
@@ -56,15 +82,35 @@ Response:
 {"status":"ok"}
 ```
 
+### Register Attestation
+
+```bash
+curl -X POST http://10.0.0.108:8080/app-attest/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "keyID": "base64-key-id",
+    "attestationObject": "base64-attestation-object",
+    "clientDataHash": "base64-client-data-hash"
+  }'
+```
+
+Response:
+```json
+{
+  "status": "registered|rejected",
+  "reason": "optional string"
+}
+```
+
 ### Verify Assertion
 
 ```bash
 curl -X POST http://10.0.0.108:8080/app-attest/verify \
   -H "Content-Type: application/json" \
   -d '{
-    "keyID": "your-key-id",
-    "assertionObject": "...",
-    "clientDataHash": "..."
+    "keyID": "base64-key-id",
+    "assertionObject": "base64-assertion-object",
+    "clientDataHash": "base64-client-data-hash"
   }'
 ```
 
@@ -78,12 +124,16 @@ Response:
 
 ## Key Store
 
-Public keys are stored in `/opt/appattest/keys/<keyID>.pub` as base64-encoded 65-byte uncompressed keys (0x04 || X || Y).
+Public keys are stored server-side and looked up by keyID.
 
-Example:
-```bash
-echo "BASE64_ENCODED_65_BYTE_KEY" > /opt/appattest/keys/my-key-id.pub
-```
+**Default implementation**: RAM-backed storage (in-memory dictionary) for testing and development. Keys are ephemeral and reset on server restart.
+
+**Production note**: Storage is intentionally abstracted. Replace with:
+- Filesystem-backed storage (`/opt/appattest/keys/<keyID>.pub`)
+- Database (PostgreSQL, SQLite, etc.)
+- Key management service (AWS KMS, HashiCorp Vault, etc.)
+
+Keys are stored as 65-byte uncompressed format: `0x04 || X || Y` (P-256 public key).
 
 ## Testing
 
@@ -116,8 +166,20 @@ sudo ufw status
 sudo ufw allow 8080
 ```
 
+## What This Is Not
+
+This backend intentionally does not:
+- Perform device trust policy
+- Track risk scores
+- Store long-term state beyond keys
+- Enforce rate limits
+- Authenticate callers
+- Hide implementation details
+
+Those are higher-level concerns and should live outside cryptographic verification.
+
 ## TODO
 
-1. Integrate actual AppAttestDecoder package API (currently placeholder)
+1. Replace placeholder decoder with finalized AppAttestDecoder API once stabilized
 2. Add IP allowlist middleware if needed
 3. Add request logging (hashes only, no raw data)

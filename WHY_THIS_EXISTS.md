@@ -2,31 +2,46 @@
 
 ## The Problem
 
-App Attest verification is cryptographically complex and requires precise, server-side validation. Most implementations either:
-- Trust client-provided data (security flaw)
-- Mix validation logic with policy decisions (architectural flaw)
-- Use opaque libraries without understanding the verification path (maintenance flaw)
+App Attest verification is cryptographically complex and requires precise, server-side validation. Most implementations are wrong in at least one of these ways:
+- They verify the wrong payload (CBOR Sig_structure instead of raw concatenation)
+- They accidentally double-hash before signature verification
+- They mix protocol parsing with policy decisions
+- They rely on undocumented behavior or cargo-culted WebAuthn code
+- They make it impossible to audit what is actually being verified
 
 ## The Solution
 
-This backend provides a **forensic-grade App Attest verification service** that:
+This backend provides a **specification-correct App Attest verification service** that:
 - Decodes assertions without trusting client hints
-- Reconstructs Sig_structure server-side (single source of truth)
+- Reconstructs the exact bytes Apple signed (`authenticatorData || clientDataHash`)
 - Performs pure cryptographic verification (no policy, no heuristics)
 - Makes explicit trust decisions (backend owns trust, validator owns math)
 
 ## What Makes This Different
 
-**Explicit boundaries:**
-- iOS app produces assertions only
-- Backend owns decoding, reconstruction, validation, and trust
-- Validator is pure math and frozen
-- Decoder is the single source of truth for bytes
-- No layer lies about certainty
+**Spec correctness:**
+- Verifies `authenticatorData || clientDataHash`, which is what Apple actually signs
+- Does not assume COSE or WebAuthn semantics that do not apply to App Attest
 
-**Forensic behavior:**
-- The validator answers exactly one question: "Does this signature verify over these exact bytes with this exact key?"
-- Nothing else. No policy creep. No "almost valid." No silent reconstruction.
+**Cryptographic clarity:**
+- Validator performs a single ES256 verification
+- No hidden hashing, no opaque helpers, no magic wrappers
+- The bytes being verified are visible and traceable
+
+**Separation of concerns:**
+- Decoder parses
+- Validator verifies
+- Storage is replaceable (RAM, filesystem, HSM, database)
+- Policy is intentionally not included
+
+**Auditability:**
+- Designed so a security engineer can answer: "What exact bytes are signed, and why?"
+- This is rare in App Attest examples and SDK-level integrations
+
+**Production flexibility:**
+- Can be dropped behind an API gateway
+- Can be wrapped with auth, rate limiting, or allowlists
+- Can be used as a reference implementation even if not deployed directly
 
 **Cryptographically closed:**
 - Real assertion → Verified
@@ -35,14 +50,21 @@ This backend provides a **forensic-grade App Attest verification service** that:
 
 ## What This Is Not
 
-- Not a demo or proof-of-concept
-- Not a product feature
-- Not a "security framework"
-- Not a replacement for proper key management
+This backend intentionally does not:
+- Perform device trust policy
+- Track risk scores
+- Store long-term state beyond keys
+- Enforce rate limits
+- Authenticate callers
+- Hide implementation details
+
+Those are higher-level concerns and should live outside cryptographic verification.
 
 ## What This Is
 
-A **trust primitive** — a building block for systems that need to verify App Attest assertions correctly, without shortcuts, without guessing, without lying.
+A **minimal, specification-correct verification layer** — a building block for systems that need to verify App Attest assertions correctly, without shortcuts, without guessing, without lying.
+
+In short: this repo is valuable because it is boringly correct in a space full of half-working implementations.
 
 ## When to Use This
 
@@ -61,16 +83,19 @@ A **trust primitive** — a building block for systems that need to verify App A
 ## The Discipline
 
 This system is **boring by design**:
+- Correct bytes
+- Correct hash
+- Correct signature semantics
+- No accidental complexity
 - No retries
 - No heuristics
 - No "helpful" defaults
 - No policy in the validator
 - No trust in client data
 
-That discipline is what makes it correct.
+That discipline is what makes it correct. That's exactly what App Attest needs, and almost no public examples provide it.
 
 ---
 
-**Built:** [Date]
-**Status:** Cryptographically closed
+**Status:** Cryptographically closed and specification-correct
 **Next:** Use it, don't improve it.
