@@ -277,39 +277,6 @@ sudo ufw status
 sudo ufw allow 8080
 ```
 
-## What This Service Does and Does Not Do
-
-### What This Service DOES
-
-1. **Register public keys**: Extracts and stores P-256 public keys from App Attest attestation objects
-2. **Verify signatures**: Cryptographically verifies that assertions were signed by the registered key
-3. **Detect tampering**: Rejects any assertion where the signature does not match the signed bytes
-4. **Provide audit trail**: Logs what bytes were verified (in debug mode)
-
-### What This Service DOES NOT Do
-
-**Security concerns it does NOT address:**
-- **Device trust**: Does not verify the device is legitimate or trusted
-- **User authentication**: Does not verify who the user is
-- **Request authorization**: Does not verify if the request is allowed
-- **Replay protection**: Does not prevent reusing old assertions
-- **Rate limiting**: Does not prevent abuse or DoS attacks
-- **Caller authentication**: Does not verify who is calling the API
-
-**Operational concerns it does NOT address:**
-- **Key rotation**: Does not handle key expiration or rotation
-- **Key revocation**: Does not support revoking compromised keys
-- **Persistent storage**: Default implementation uses RAM (keys lost on restart)
-- **High availability**: Single-instance service, no clustering
-- **Request logging**: Minimal logging, no audit trail by default
-
-**These are higher-level concerns that must be implemented separately**, typically in:
-- API gateway middleware (auth, rate limiting, IP allowlists)
-- Application logic (user authentication, authorization)
-- Infrastructure (persistent storage, high availability, monitoring)
-
-**Example**: If you need to prevent assertion replay, implement timestamp checking in your application logic. If you need user authentication, add it in middleware. This service only answers: "Is this signature cryptographically valid?" Everything else is your responsibility.
-
 ## TODO
 
 1. Replace placeholder decoder with finalized AppAttestDecoder API once stabilized
