@@ -76,9 +76,11 @@ It does not answer:
 - `POST /app-attest/verify` - Verifies an assertion signature against a previously registered key
 
 **Components:**
-- Decoder: Parses CBOR and extracts fields
+- Decoder: Parses CBOR and extracts fields (AppAttestDecoder package)
 - Validator: Performs signature verification
 - Key store: Looks up public keys by keyID (RAM-backed by default)
+
+Decoder implementation: https://github.com/Mikedan37/AppAttestDecoder
 
 ## Setup
 
@@ -274,8 +276,3 @@ sudo ufw status
 sudo ufw allow 8080
 ```
 
-## TODO
-
-1. Replace placeholder decoder with finalized AppAttestDecoder API once stabilized
-2. Add IP allowlist middleware if needed
-3. Add request logging (hashes only, no raw data)
