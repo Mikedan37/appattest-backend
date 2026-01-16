@@ -37,7 +37,7 @@ This backend provides a **specification-correct App Attest verification service*
 - Policy is intentionally not included
 
 **Auditability:**
-- Designed so a security engineer can answer: "What exact bytes are signed, and why?"
+- Designed so a reviewer can answer: "What exact bytes are verified, and why?"
 - This is rare in App Attest examples and SDK-level integrations
 
 **Production flexibility:**

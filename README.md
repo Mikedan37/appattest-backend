@@ -26,7 +26,7 @@ This backend explicitly avoids all of that.
 - **Spec correctness**: Verifies `authenticatorData || clientDataHash`, which is what Apple actually signs
 - **Cryptographic clarity**: Single ES256 verification, no hidden hashing, no opaque helpers
 - **Separation of concerns**: Decoder parses, validator verifies, storage is replaceable
-- **Auditability**: Designed so a security engineer can answer "What exact bytes are signed, and why?"
+- **Auditability**: Designed so a reviewer can answer: "What exact bytes are verified, and why?"
 
 ## Security Boundaries
 
