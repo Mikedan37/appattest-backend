@@ -242,9 +242,9 @@ Run smoke tests:
 ## Network Access
 
 **Important**: The service listens on `0.0.0.0:8080` (all interfaces), which allows:
-- Local: `curl http://127.0.0.1:8080/health` ✅
-- LAN: `curl http://10.0.0.108:8080/health` ✅ (if firewall allows)
-- iOS app: Can reach from phone on same network ✅
+- Local: `curl http://127.0.0.1:8080/health`
+- LAN: `curl http://10.0.0.108:8080/health` (if firewall allows)
+- iOS app: Can reach from phone on same network
 
 If health check works locally but not from phone, check firewall:
 ```bash
@@ -264,19 +264,19 @@ sudo ufw allow 8080
 ### What This Service DOES NOT Do
 
 **Security concerns it does NOT address:**
-- ❌ **Device trust**: Does not verify the device is legitimate or trusted
-- ❌ **User authentication**: Does not verify who the user is
-- ❌ **Request authorization**: Does not verify if the request is allowed
-- ❌ **Replay protection**: Does not prevent reusing old assertions
-- ❌ **Rate limiting**: Does not prevent abuse or DoS attacks
-- ❌ **Caller authentication**: Does not verify who is calling the API
+- **Device trust**: Does not verify the device is legitimate or trusted
+- **User authentication**: Does not verify who the user is
+- **Request authorization**: Does not verify if the request is allowed
+- **Replay protection**: Does not prevent reusing old assertions
+- **Rate limiting**: Does not prevent abuse or DoS attacks
+- **Caller authentication**: Does not verify who is calling the API
 
 **Operational concerns it does NOT address:**
-- ❌ **Key rotation**: Does not handle key expiration or rotation
-- ❌ **Key revocation**: Does not support revoking compromised keys
-- ❌ **Persistent storage**: Default implementation uses RAM (keys lost on restart)
-- ❌ **High availability**: Single-instance service, no clustering
-- ❌ **Request logging**: Minimal logging, no audit trail by default
+- **Key rotation**: Does not handle key expiration or rotation
+- **Key revocation**: Does not support revoking compromised keys
+- **Persistent storage**: Default implementation uses RAM (keys lost on restart)
+- **High availability**: Single-instance service, no clustering
+- **Request logging**: Minimal logging, no audit trail by default
 
 **These are higher-level concerns that must be implemented separately**, typically in:
 - API gateway middleware (auth, rate limiting, IP allowlists)
