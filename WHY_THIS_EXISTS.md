@@ -48,6 +48,11 @@ This backend provides a **specification-correct App Attest verification service*
 - One-byte tamper → Rejected
 - No forgiveness. No normalization. No trust leakage.
 
+**Security boundaries:**
+- This service verifies cryptographic authenticity only
+- It does not establish device trust, user trust, or request authorization
+- Those concerns must be layered separately
+
 ## What This Is Not
 
 This backend intentionally does not:
