@@ -1,5 +1,7 @@
 # Why This Exists
 
+**Independent Development**: This project was developed independently while implementing and testing App Attest verification logic. It reflects the lessons learned from debugging real verification failures, not an official or endorsed implementation.
+
 ## The Problem
 
 App Attest verification is cryptographically complex and requires precise, server-side validation. Most implementations are wrong in at least one of these ways:

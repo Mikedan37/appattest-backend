@@ -2,6 +2,8 @@
 
 A minimal, specification-correct backend for verifying Apple App Attest assertions.
 
+**Independent Implementation**: This repository grew out of hands-on implementation and debugging work with App Attest, where subtle verification failures only became visible once the system was exercised end-to-end. It is an independent, minimal implementation intended to document correct verification behavior, not an official or endorsed reference.
+
 This backend does exactly three things, deliberately and transparently:
 1. Decodes App Attest assertion objects
 2. Reconstructs the exact bytes Apple signed
