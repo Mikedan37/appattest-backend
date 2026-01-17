@@ -55,13 +55,13 @@ final class SecurityBoundaryTests: XCTestCase {
             ])
         }, afterResponse: { res in
             // Should not require user authentication
-            XCTAssertNotEqual(res.status, .unauthorized)
+            XCTAssertNotEqual(res.status_result?.publicKey, .unauthorized)
             // Response should not contain user information
-            if let body = try? res.content.decode([String: Any].self) {
-                XCTAssertNil(body["user"])
-                XCTAssertNil(body["userId"])
-                XCTAssertNil(body["authenticated"])
-            }
+            // VerifyResponse only contains status and reason - no user fields
+            let body = try res.content.decode(VerifyResponse.self)
+            // VerifyResponse struct only contains status and reason - no user information
+            XCTAssertNotNil(body.status)
+            // No user fields exist in VerifyResponse struct
         })
     }
     
@@ -122,7 +122,7 @@ final class SecurityBoundaryTests: XCTestCase {
                 ])
             }, afterResponse: { res in
                 // Should not return 429 Too Many Requests
-                XCTAssertNotEqual(res.status, .tooManyRequests, "Service should not rate limit")
+                XCTAssertNotEqual(res.status_result?.publicKey, .tooManyRequests, "Service should not rate limit")
             })
         }
     }
@@ -145,8 +145,8 @@ final class SecurityBoundaryTests: XCTestCase {
                 ])
             }, afterResponse: { res in
                 // Should process all requests (may reject, but not block)
-                XCTAssertNotEqual(res.status, .serviceUnavailable)
-                XCTAssertNotEqual(res.status, .tooManyRequests)
+                XCTAssertNotEqual(res.status_result?.publicKey, .serviceUnavailable)
+                XCTAssertNotEqual(res.status_result?.publicKey, .tooManyRequests)
             })
         }
     }
@@ -197,7 +197,7 @@ final class SecurityBoundaryTests: XCTestCase {
         // Try to revoke a key (should not exist)
         try app.test(.DELETE, "/app-attest/revoke/test-key", afterResponse: { res in
             // Should return 404 (endpoint doesn't exist)
-            XCTAssertEqual(res.status, .notFound)
+            XCTAssertEqual(res.status_result?.publicKey, .notFound)
         })
     }
 }

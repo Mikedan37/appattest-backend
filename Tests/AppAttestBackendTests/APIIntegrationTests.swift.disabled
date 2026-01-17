@@ -25,14 +25,14 @@ final class APIIntegrationTests: XCTestCase {
     
     func testHealthEndpointReturns200() throws {
         try app.test(.GET, "/health", afterResponse: { res in
-            XCTAssertEqual(res.status, .ok)
+            XCTAssertEqual(res.status_result?.publicKey, .ok)
         })
     }
     
     func testHealthEndpointReturnsCorrectJSON() throws {
         try app.test(.GET, "/health", afterResponse: { res in
-            let body = try res.content.decode([String: String].self)
-            XCTAssertEqual(body["status"], "ok")
+            let body = try res.content.decode(HealthResponse.self)
+            XCTAssertEqual(body.status_result?.publicKey, "ok")
         })
     }
     
@@ -42,7 +42,7 @@ final class APIIntegrationTests: XCTestCase {
         
         let start = Date()
         try app.test(.GET, "/health", afterResponse: { res in
-            XCTAssertEqual(res.status, .ok)
+            XCTAssertEqual(res.status_result?.publicKey, .ok)
         })
         let duration = Date().timeIntervalSince(start)
         
@@ -69,10 +69,10 @@ final class APIIntegrationTests: XCTestCase {
                 "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
             ])
         }, afterResponse: { res in
-            XCTAssertEqual(res.status, .ok)
-            let body = try res.content.decode([String: String].self)
-            XCTAssertEqual(body["status"], "rejected")
-            XCTAssertNotNil(body["reason"])
+            XCTAssertEqual(res.status_result?.publicKey, .ok)
+            let body = try res.content.decode(RegisterResponse.self)
+            XCTAssertEqual(body.status_result?.publicKey, "rejected")
+            XCTAssertNotNil(body.reason)
         })
     }
     
@@ -87,10 +87,10 @@ final class APIIntegrationTests: XCTestCase {
                 "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
             ])
         }, afterResponse: { res in
-            XCTAssertEqual(res.status, .ok)
-            let body = try res.content.decode([String: String].self)
-            XCTAssertEqual(body["status"], "rejected")
-            XCTAssertNotNil(body["reason"])
+            XCTAssertEqual(res.status_result?.publicKey, .ok)
+            let body = try res.content.decode(RegisterResponse.self)
+            XCTAssertEqual(body.status_result?.publicKey, "rejected")
+            XCTAssertNotNil(body.reason)
         })
     }
     
@@ -119,18 +119,19 @@ final class APIIntegrationTests: XCTestCase {
                 "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
             ])
         }, afterResponse: { res in
-            XCTAssertEqual(res.status, .ok)
-            let body = try res.content.decode([String: String].self)
-            XCTAssertEqual(body["status"], "rejected")
-            XCTAssertTrue(body["reason"]?.contains("not found") == true ||
-                         body["reason"]?.contains("Public key") == true)
+            XCTAssertEqual(res.status_result?.publicKey, .ok)
+            let body = try res.content.decode(VerifyResponse.self)
+            XCTAssertEqual(body.status_result?.publicKey, "rejected")
+            XCTAssertTrue(body.reason?.contains("not found") == true ||
+                         body.reason?.contains("Public key") == true)
         })
     }
     
     func testVerifyRejectsInvalidCBOR() throws {
         let keyID = "test-invalid-cbor"
         let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
-        _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+        let keyIDBytes = Data(keyID.utf8)
+        _ = KeyStore.storePublicKey(keyIDBytes: keyIDBytes, publicKey: publicKey, flowID: "test-flow", logger: nil)
         
         // Invalid CBOR (array instead of map)
         let invalidCBOR = Data([0x84, 0x01, 0x02, 0x03, 0x04])
@@ -142,17 +143,18 @@ final class APIIntegrationTests: XCTestCase {
                 "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
             ])
         }, afterResponse: { res in
-            XCTAssertEqual(res.status, .ok)
-            let body = try res.content.decode([String: String].self)
-            XCTAssertEqual(body["status"], "rejected")
-            XCTAssertNotNil(body["reason"])
+            XCTAssertEqual(res.status_result?.publicKey, .ok)
+            let body = try res.content.decode(RegisterResponse.self)
+            XCTAssertEqual(body.status_result?.publicKey, "rejected")
+            XCTAssertNotNil(body.reason)
         })
     }
     
     func testVerifyRejectsMissingFields() throws {
         let keyID = "test-missing-fields"
         let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
-        _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+        let keyIDBytes = Data(keyID.utf8)
+        _ = KeyStore.storePublicKey(keyIDBytes: keyIDBytes, publicKey: publicKey, flowID: "test-flow", logger: nil)
         
         // CBOR map with only signature (missing authenticatorData)
         var cborBytes = Data()
@@ -170,11 +172,11 @@ final class APIIntegrationTests: XCTestCase {
                 "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
             ])
         }, afterResponse: { res in
-            XCTAssertEqual(res.status, .ok)
-            let body = try res.content.decode([String: String].self)
-            XCTAssertEqual(body["status"], "rejected")
-            XCTAssertTrue(body["reason"]?.contains("authenticatorData") == true ||
-                         body["reason"]?.contains("Missing") == true)
+            XCTAssertEqual(res.status_result?.publicKey, .ok)
+            let body = try res.content.decode(VerifyResponse.self)
+            XCTAssertEqual(body.status_result?.publicKey, "rejected")
+            XCTAssertTrue(body.reason?.contains("authenticatorData") == true ||
+                         body.reason?.contains("Missing") == true)
         })
     }
     
@@ -208,7 +210,8 @@ final class APIIntegrationTests: XCTestCase {
                 // Don't register this key
             } else {
                 let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
-                _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+                let keyIDBytes = Data(keyID.utf8)
+        _ = KeyStore.storePublicKey(keyIDBytes: keyIDBytes, publicKey: publicKey, flowID: "test-flow", logger: nil)
             }
             
             try app.test(.POST, "/app-attest/verify", beforeRequest: { req in
@@ -218,11 +221,11 @@ final class APIIntegrationTests: XCTestCase {
                     "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
                 ])
             }, afterResponse: { res in
-                XCTAssertEqual(res.status, .ok)
-                let body = try res.content.decode([String: String].self)
-                if body["status"] == "rejected" {
-                    XCTAssertNotNil(body["reason"], "Rejected response must include reason (test case: \(name))")
-                    XCTAssertFalse(body["reason"]?.isEmpty == true, "Reason must not be empty (test case: \(name))")
+                XCTAssertEqual(res.status_result?.publicKey, .ok)
+                let body = try res.content.decode(VerifyResponse.self)
+                if body.status == "rejected" {
+                    XCTAssertNotNil(body.reason, "Rejected response must include reason (test case: \(name))")
+                    XCTAssertFalse(body.reason?.isEmpty == true, "Reason must not be empty (test case: \(name))")
                 }
             })
         }
@@ -235,7 +238,8 @@ final class APIIntegrationTests: XCTestCase {
         
         let keyID = "test-response-structure"
         let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
-        _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+        let keyIDBytes = Data(keyID.utf8)
+        _ = KeyStore.storePublicKey(keyIDBytes: keyIDBytes, publicKey: publicKey, flowID: "test-flow", logger: nil)
         
         var cborBytes = Data()
         cborBytes.append(0xa2)
@@ -257,16 +261,16 @@ final class APIIntegrationTests: XCTestCase {
                 "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
             ])
         }, afterResponse: { res in
-            XCTAssertEqual(res.status, .ok)
-            let body = try res.content.decode([String: Any].self)
+            XCTAssertEqual(res.status_result?.publicKey, .ok)
+            let body = try res.content.decode(VerifyResponse.self)
             
             // Must have status field
-            XCTAssertNotNil(body["status"])
-            XCTAssertTrue(body["status"] is String)
+            XCTAssertNotNil(body.status)
+            XCTAssertTrue(body.status is String)
             
             // Reason is optional
-            if let reason = body["reason"] {
-                // If present, must be String or null
+            if let reason = body.reason {
+                // If present, must be String
                 XCTAssertTrue(reason is String || reason is NSNull)
             }
         })

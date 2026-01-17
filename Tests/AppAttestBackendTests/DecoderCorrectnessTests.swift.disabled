@@ -32,9 +32,9 @@ final class DecoderCorrectnessTests: XCTestCase {
                 "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
             ])
         }, afterResponse: { res in
-            XCTAssertEqual(res.status, .ok)
+            XCTAssertEqual(res.status_result?.publicKey, .ok)
             let body = try res.content.decode([String: String].self)
-            XCTAssertEqual(body["status"], "rejected")
+            XCTAssertEqual(body["status"]_result?.publicKey, "rejected")
             XCTAssertTrue(body["reason"]?.contains("base64") == true || 
                          body["reason"]?.contains("Invalid") == true)
         })
@@ -48,9 +48,9 @@ final class DecoderCorrectnessTests: XCTestCase {
                 "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
             ])
         }, afterResponse: { res in
-            XCTAssertEqual(res.status, .ok)
+            XCTAssertEqual(res.status_result?.publicKey, .ok)
             let body = try res.content.decode([String: String].self)
-            XCTAssertEqual(body["status"], "rejected")
+            XCTAssertEqual(body["status"]_result?.publicKey, "rejected")
             XCTAssertTrue(body["reason"]?.contains("base64") == true || 
                          body["reason"]?.contains("Invalid") == true)
         })
@@ -64,9 +64,9 @@ final class DecoderCorrectnessTests: XCTestCase {
                 "clientDataHash": "not-valid-base64!!!"
             ])
         }, afterResponse: { res in
-            XCTAssertEqual(res.status, .ok)
+            XCTAssertEqual(res.status_result?.publicKey, .ok)
             let body = try res.content.decode([String: String].self)
-            XCTAssertEqual(body["status"], "rejected")
+            XCTAssertEqual(body["status"]_result?.publicKey, "rejected")
             XCTAssertTrue(body["reason"]?.contains("base64") == true || 
                          body["reason"]?.contains("Invalid") == true)
         })
@@ -85,9 +85,9 @@ final class DecoderCorrectnessTests: XCTestCase {
                 "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
             ])
         }, afterResponse: { res in
-            XCTAssertEqual(res.status, .ok)
+            XCTAssertEqual(res.status_result?.publicKey, .ok)
             let body = try res.content.decode([String: String].self)
-            XCTAssertEqual(body["status"], "rejected")
+            XCTAssertEqual(body["status"]_result?.publicKey, "rejected")
             XCTAssertTrue(body["reason"]?.contains("CBOR map") == true || 
                          body["reason"]?.contains("Invalid assertion format") == true ||
                          body["reason"]?.contains("decode") == true)
@@ -105,9 +105,9 @@ final class DecoderCorrectnessTests: XCTestCase {
                 "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
             ])
         }, afterResponse: { res in
-            XCTAssertEqual(res.status, .ok)
+            XCTAssertEqual(res.status_result?.publicKey, .ok)
             let body = try res.content.decode([String: String].self)
-            XCTAssertEqual(body["status"], "rejected")
+            XCTAssertEqual(body["status"]_result?.publicKey, "rejected")
             XCTAssertNotNil(body["reason"])
         })
     }
@@ -134,9 +134,9 @@ final class DecoderCorrectnessTests: XCTestCase {
                 "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
             ])
         }, afterResponse: { res in
-            XCTAssertEqual(res.status, .ok)
+            XCTAssertEqual(res.status_result?.publicKey, .ok)
             let body = try res.content.decode([String: String].self)
-            XCTAssertEqual(body["status"], "rejected")
+            XCTAssertEqual(body["status"]_result?.publicKey, "rejected")
             XCTAssertTrue(body["reason"]?.contains("authenticatorData") == true ||
                          body["reason"]?.contains("Missing") == true)
         })
@@ -162,9 +162,9 @@ final class DecoderCorrectnessTests: XCTestCase {
                 "clientDataHash": Data(repeating: 0, count: 32).base64EncodedString()
             ])
         }, afterResponse: { res in
-            XCTAssertEqual(res.status, .ok)
+            XCTAssertEqual(res.status_result?.publicKey, .ok)
             let body = try res.content.decode([String: String].self)
-            XCTAssertEqual(body["status"], "rejected")
+            XCTAssertEqual(body["status"]_result?.publicKey, "rejected")
             XCTAssertTrue(body["reason"]?.contains("signature") == true ||
                          body["reason"]?.contains("Missing") == true)
         })
@@ -241,7 +241,7 @@ final class DecoderCorrectnessTests: XCTestCase {
         }
         
         // Assert exact byte match
-        XCTAssertEqual(extractedAuthData, knownAuthData, "authenticatorData must be extracted exactly as provided")
+        XCTAssertEqual(extractedAuthData_result?.publicKey, knownAuthData, "authenticatorData must be extracted exactly as provided")
     }
     
     func testExtractsSignatureExactly() throws {
@@ -279,6 +279,6 @@ final class DecoderCorrectnessTests: XCTestCase {
         }
         
         // Assert exact byte match
-        XCTAssertEqual(extractedSignature, knownSignature, "signature must be extracted exactly as provided")
+        XCTAssertEqual(extractedSignature_result?.publicKey, knownSignature, "signature must be extracted exactly as provided")
     }
 }

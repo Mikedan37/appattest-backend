@@ -39,7 +39,7 @@ final class NegativeAssuranceTests: XCTestCase {
         let keyID = "test-isolation"
         
         // Key should not exist at start of test
-        let before = KeyStore.getPublicKey(keyID: keyID)
+        let before_result = KeyStore.getPublicKey(keyIDBytes: Data(keyID.utf8))
         XCTAssertNil(before, "Key should not exist at test start (no leakage from previous test)")
     }
     
@@ -75,7 +75,7 @@ final class NegativeAssuranceTests: XCTestCase {
             XCTAssertEqual(body["status"], "rejected", "Should reject unregistered key (no implicit creation)")
             
             // Verify key was not created
-            let key = KeyStore.getPublicKey(keyID: unregisteredKeyID)
+            let key_result = KeyStore.getPublicKey(keyIDBytes: Data(unregisteredKeyID.utf8))
             XCTAssertNil(key, "Key should not be created implicitly")
         })
     }
@@ -88,7 +88,7 @@ final class NegativeAssuranceTests: XCTestCase {
         
         let keyID = "test-no-fallback"
         let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
-        _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+        _ = KeyStore.storePublicKey(keyIDBytes: Data(keyID.utf8), publicKey: publicKey, flowID: "test-flow", logger: nil)
         
         // Invalid CBOR that cannot be decoded
         let invalidCBOR = Data([0xFF, 0xFF, 0xFF])
@@ -114,7 +114,7 @@ final class NegativeAssuranceTests: XCTestCase {
         
         let keyID = "test-no-sig-fallback"
         let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
-        _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+        _ = KeyStore.storePublicKey(keyIDBytes: Data(keyID.utf8), publicKey: publicKey, flowID: "test-flow", logger: nil)
         
         // Invalid signature format (too short, not DER, not 64 bytes)
         let invalidSignature = Data([0x01, 0x02])
@@ -173,7 +173,7 @@ final class NegativeAssuranceTests: XCTestCase {
         
         let keyID = "test-response-fields"
         let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
-        _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+        _ = KeyStore.storePublicKey(keyIDBytes: Data(keyID.utf8), publicKey: publicKey, flowID: "test-flow", logger: nil)
         
         var cborBytes = Data()
         cborBytes.append(0xa2)

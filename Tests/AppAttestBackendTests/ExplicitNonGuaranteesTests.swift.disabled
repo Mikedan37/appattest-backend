@@ -42,7 +42,7 @@ final class ExplicitNonGuaranteesTests: XCTestCase {
         
         let keyID = "test-replay"
         let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
-        _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+        _ = KeyStore.storePublicKey(keyIDBytes: Data(keyID.utf8), publicKey: publicKey, flowID: "test-flow", logger: nil)
         
         // Create same assertion CBOR
         var cborBytes = Data()
@@ -120,7 +120,7 @@ final class ExplicitNonGuaranteesTests: XCTestCase {
         
         let keyID = "test-metadata"
         let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
-        _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+        _ = KeyStore.storePublicKey(keyIDBytes: Data(keyID.utf8), publicKey: publicKey, flowID: "test-flow", logger: nil)
         
         var cborBytes = Data()
         cborBytes.append(0xa2)

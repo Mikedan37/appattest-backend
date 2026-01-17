@@ -94,7 +94,7 @@ final class SignatureVerificationTests: XCTestCase {
         let dummyPublicKey = Data([0x04] + Array(repeating: 0, count: 64))
         
         // Store key directly (bypassing registration endpoint for test)
-        _ = KeyStore.storePublicKey(keyID: dummyKeyID, publicKey: dummyPublicKey, logger: nil)
+        _ = KeyStore.storePublicKey(keyIDBytes: Data(dummyKeyID.utf8), publicKey: dummyPublicKey, flowID: "test-flow", logger: nil)
         
         // Try to verify with original signature
         try app.test(.POST, "/app-attest/verify", beforeRequest: { req in
@@ -210,7 +210,7 @@ final class SignatureVerificationTests: XCTestCase {
         // Register a key
         let keyID = "test-raw-signature"
         let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
-        _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+        _ = KeyStore.storePublicKey(keyIDBytes: Data(keyID.utf8), publicKey: publicKey, flowID: "test-flow", logger: nil)
         
         try app.test(.POST, "/app-attest/verify", beforeRequest: { req in
             try req.content.encode([
@@ -264,7 +264,7 @@ final class SignatureVerificationTests: XCTestCase {
         
         let keyID = "test-der-signature"
         let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
-        _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+        _ = KeyStore.storePublicKey(keyIDBytes: Data(keyID.utf8), publicKey: publicKey, flowID: "test-flow", logger: nil)
         
         try app.test(.POST, "/app-attest/verify", beforeRequest: { req in
             try req.content.encode([
@@ -305,7 +305,7 @@ final class SignatureVerificationTests: XCTestCase {
         
         let keyID = "test-invalid-signature"
         let publicKey = Data([0x04] + Array(repeating: 0, count: 64))
-        _ = KeyStore.storePublicKey(keyID: keyID, publicKey: publicKey, logger: nil)
+        _ = KeyStore.storePublicKey(keyIDBytes: Data(keyID.utf8), publicKey: publicKey, flowID: "test-flow", logger: nil)
         
         try app.test(.POST, "/app-attest/verify", beforeRequest: { req in
             try req.content.encode([
