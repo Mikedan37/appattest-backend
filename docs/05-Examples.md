@@ -1,198 +1,143 @@
 # Examples
 
-This chapter provides usage examples showing correct and incorrect patterns.
+This chapter provides minimal API usage examples.
 
 ## Minimal Example
 
-This example shows the minimal code required to verify an assertion.
+```swift
+let response = try await httpClient.post("/app-attest/verify", body: request)
+let result = try JSONDecoder().decode(VerifyResponse.self, from: response.data)
+
+switch result.status {
+case "verified":
+    // Signature is cryptographically valid for observed bytes
+    break
+case "rejected":
+    throw VerificationError.rejected
+}
+```
+
+This example demonstrates cryptographic verification only. Trust, authorization, freshness, and policy are external concerns.
+
+## API Usage Patterns
+
+### Register Endpoint
 
 ```swift
-// Step 1: Request challenge
-let challengeResponse = try await httpClient.get(
-    "/app-attest/challenge?keyID=\(keyIDBase64)&flowID=\(flowID)"
+let registerRequest = RegisterRequest(
+    keyID: keyIDBase64,
+    attestationObject: attestationObjectBase64
 )
-let challengeData = try JSONDecoder().decode(ChallengeResponse.self, from: challengeResponse.data)
-let challengeBase64 = challengeData.challenge_b64
-let challengeID = challengeData.challenge_id
 
-// Step 2: Construct clientDataJSON and clientDataHash
-let clientDataJSON = """
-{
-    "type": "apple-appattest",
-    "challenge": "\(challengeBase64)",
-    "origin": "\(bundleID)"
-}
-""".data(using: .utf8)!
-let clientDataHash = Data(SHA256.hash(data: clientDataJSON))
-let clientDataBase64 = clientDataJSON.base64EncodedString()
+let response = try await httpClient.post("/app-attest/register", body: registerRequest)
+let result = try JSONDecoder().decode(RegisterResponse.self, from: response.data)
 
-// Step 3: Generate assertion (on device, using clientDataHash)
-// ... assertion generation code ...
+let flowID = result.flowID
+```
 
-// Step 4: Verify assertion
+### Client Data Hash Endpoint
+
+```swift
+let hashRequest = ClientDataHashRequest(
+    keyID: keyIDBase64,
+    flowID: flowID
+)
+
+let response = try await httpClient.post("/app-attest/client-data-hash", body: hashRequest)
+let result = try JSONDecoder().decode(ClientDataHashResponse.self, from: response.data)
+
+let clientDataHash = result.clientDataHash
+let expiresAt = result.expiresAt
+```
+
+### Verify Endpoint
+
+```swift
 let verifyRequest = VerifyRequest(
     keyID: keyIDBase64,
     flowID: flowID,
-    assertionObject_base64: assertionObjectBase64,
-    challenge_id: challengeID,
-    clientData_base64: clientDataBase64
+    assertionObject: assertionObjectBase64,
+    verifyRunID: verifyRunID
 )
 
-let verifyResponse = try await httpClient.post("/app-attest/verify", body: verifyRequest)
-let result = try JSONDecoder().decode(VerifyResponse.self, from: verifyResponse.data)
+let response = try await httpClient.post("/app-attest/verify", body: verifyRequest)
+let result = try JSONDecoder().decode(VerifyResponse.self, from: response.data)
 
-if result.status == "verified" {
-    // Note: This example shows verification only.
-    // Production code must implement:
-    // - Trust validation (certificate chain verification)
-    // - Authorization (access control checks)
-    // - Policy enforcement (bundle ID, team ID validation)
-    // See Verification Semantics for details.
-    
-    if knownKeyIDs.contains(keyID) {
-        grantAccess()
-    } else {
-        return .unauthorized
-    }
-} else {
-    return .unauthorized
+switch result.status {
+case "verified":
+    // Cryptographic verification succeeded
+    break
+case "rejected":
+    // Verification failed: result.reason contains details
+    throw VerificationError.rejected(result.reason)
 }
 ```
 
-**What this example does:**
-- Requests challenge from backend
-- Constructs clientDataHash from challenge
-- Verifies cryptographic signature
-- Checks protocol-level bindings
-- Grants access if keyID is known
+## Response Fields
 
-**What this example does not do:**
-- Validate certificate chain
-- Check authorization
-- Enforce policy (bundle ID, team ID)
-- Validate freshness beyond 5-minute TTL
+### RegisterResponse
 
-## Correct Full Usage
+- `status`: "registered" | "rejected"
+- `flowID`: UUID string
+- `reason`: Optional error message
 
-This example shows complete security flow with all required checks.
+### ClientDataHashResponse
 
-```swift
-// Step 1-3: Same as minimal example (request challenge, construct clientDataHash, generate assertion)
+- `clientDataHash`: Base64-encoded 32-byte hash
+- `expiresAt`: ISO8601 timestamp
 
-// Step 4: Verify assertion
-let verifyResponse = try await httpClient.post("/app-attest/verify", body: verifyRequest)
-let result = try JSONDecoder().decode(VerifyResponse.self, from: verifyResponse.data)
+### VerifyResponse
 
-guard result.status == "verified" else {
-    return .unauthorized
-}
+- `status`: "verified" | "rejected"
+- `reason`: Optional error message
 
-// Step 5: Trust validation (required)
-// Validate certificate chain from attestation object
-guard let attestationObject = Data(base64Encoded: assertionObjectBase64) else {
-    return .badRequest
-}
-guard validateCertificateChain(attestationObject: attestationObject) else {
-    return .unauthorized
-}
-
-// Step 6: Authorization (required)
-// Check user permissions and access control
-guard let user = getCurrentUser(),
-      isAuthorized(user: user, keyID: keyID) else {
-    return .forbidden
-}
-
-// Step 7: Policy enforcement (required)
-// Validate bundle ID, team ID, environment
-guard let bundleID = extractBundleID(from: attestationObject),
-      let teamID = extractTeamID(from: attestationObject),
-      validatePolicy(bundleID: bundleID, teamID: teamID) else {
-    return .forbidden
-}
-
-// Step 8: Additional freshness checks (if required)
-guard isFresh(assertionTimestamp: extractTimestamp(from: assertionObject)) else {
-    return .unauthorized
-}
-
-// Step 9: All checks passed - grant access
-grantAccess()
-```
-
-**What this example does:**
-- Verifies cryptographic signature
-- Validates certificate chain
-- Checks authorization
-- Enforces policy
-- Validates freshness
-
-**What this example does not do:**
-- Rely solely on "verified" status for security decisions
-
-## Incorrect Usage
+## Anti-Patterns
 
 ### Using "verified" as Authorization Gate
 
 ```swift
-// Incorrect: Using "verified" as authorization gate
-let verifyResponse = try await httpClient.post("/app-attest/verify", body: verifyRequest)
-let result = try JSONDecoder().decode(VerifyResponse.self, from: verifyResponse.data)
-
 if result.status == "verified" {
-    grantAccess() // Incorrect: No authorization check
+    grantAccess() // Anti-pattern: No authorization check
 }
 ```
 
-**What this example does:**
-- Verifies cryptographic signature
-- Grants access based solely on verification
+**Consequence**: A "verified" response indicates cryptographic validity only. Authorization checks must be implemented separately.
 
-**What this example does not do:**
-- Check authorization
-- Validate trust
-- Enforce policy
-
-**Problem**: A "verified" response does not provide authorization. Authorization checks must be implemented separately.
-
-**Fix**: Add authorization checks before granting access. See "Correct Full Usage" example above.
+**Correction**: Implement authorization checks before granting access.
 
 ### Accepting Client-Provided Hash
 
 ```swift
-// Incorrect: Backend must never accept hash from client
 struct VerifyRequest {
     let keyID: String
     let assertionObject: String
-    let clientDataHash: String  // Incorrect - remove this field
+    let clientDataHash: String  // Anti-pattern: Remove this field
 }
 ```
 
-**Problem**: Client could supply a different hash than what was issued, breaking replay protection.
+**Consequence**: Client could supply a different hash than what was issued, breaking replay protection.
 
-**Fix**: Backend generates and stores the hash. Client never provides it.
+**Correction**: Backend generates and stores the hash. Client never provides it.
 
 ### Using Different flowID Across Endpoints
 
 ```swift
-// Incorrect: flowID must be reused
 let flowID1 = register()  // Returns flowID: "ABC-123"
-let hash = clientDataHash(flowID: "XYZ-789")  // Incorrect - different flowID
-verify(flowID: "XYZ-789")  // Incorrect - binding violation
+let hash = clientDataHash(flowID: "XYZ-789")  // Anti-pattern: Different flowID
+verify(flowID: "XYZ-789")  // Anti-pattern: Binding violation
 ```
 
-**Problem**: flowID binds keyID, clientDataHash, and publicKey together. Using different flowIDs breaks bindings.
+**Consequence**: flowID binds keyID, clientDataHash, and publicKey together. Using different flowIDs breaks bindings.
 
-**Fix**: Reuse the same flowID across all three endpoints in a single flow.
+**Correction**: Reuse the same flowID across all three endpoints in a single flow.
 
 ### Attempting Verification Before Binding Checks
 
 ```swift
-// Incorrect: Check bindings first
-let isValid = verifySignature(...)  // Incorrect - check bindings first
+let isValid = verifySignature(...)  // Anti-pattern: Check bindings first
 if storedFlowID != requestFlowID { ... }  // Too late
 ```
 
-**Problem**: Binding violations should be caught immediately, not after expensive cryptographic operations.
+**Consequence**: Binding violations should be caught immediately, not after expensive cryptographic operations.
 
-**Fix**: Enforce all identity bindings before attempting cryptographic verification.
+**Correction**: Enforce all identity bindings before attempting cryptographic verification.

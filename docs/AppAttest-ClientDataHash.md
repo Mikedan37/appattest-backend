@@ -430,54 +430,9 @@ let publicKeyHex = publicKeyData.map { String(format: "%02x", $0) }.joined()
 #endif
 ```
 
-## Anti-Patterns (Explicitly Forbidden)
+## Anti-Patterns
 
-### Frontend Generating Hash
-```swift
-// WRONG - Frontend must never do this
-let challenge = generateChallenge()
-let clientDataJSON = buildClientDataJSON(challenge: challenge)
-let clientDataHash = SHA256.hash(data: clientDataJSON)
-generateAssertion(keyID, clientDataHash: clientDataHash)
-```
-**Why wrong:** Backend loses authority and cannot verify what was actually signed.
-
-### Backend Recomputing Hash at Verify Time
-```swift
-// WRONG - Backend must use stored hash
-let challenge = retrieveChallenge(keyID)  // WRONG - challenge not stored
-let clientDataJSON = buildClientDataJSON(challenge: challenge)
-let clientDataHash = SHA256.hash(data: clientDataJSON)  // WRONG - should use stored hash
-```
-**Why wrong:** Backend must use the exact hash it issued, not recompute it. Challenge is not stored, only the hash.
-
-### Accepting Client-Provided Hash
-```swift
-// WRONG - Backend must never accept hash from client
-struct VerifyRequest {
-    let keyID: String
-    let assertionObject: String
-    let clientDataHash: String  // WRONG - remove this field
-}
-```
-**Why wrong:** Client could supply a different hash than what was issued, breaking replay protection.
-
-### Using Different flowID Across Endpoints
-```swift
-// WRONG - flowID must be reused
-let flowID1 = register()  // Returns flowID: "ABC-123"
-let hash = clientDataHash(flowID: "XYZ-789")  // WRONG - different flowID
-verify(flowID: "XYZ-789")  // WRONG - binding violation
-```
-**Why wrong:** flowID binds keyID, clientDataHash, and publicKey together. Using different flowIDs breaks bindings.
-
-### Attempting Verification Before Binding Checks
-```swift
-// WRONG - Check bindings first
-let isValid = verifySignature(...)  // WRONG - check bindings first
-if storedFlowID != requestFlowID { ... }  // Too late
-```
-**Why wrong:** Binding violations should be caught immediately, not after expensive cryptographic operations.
+See [Examples](./05-Examples.md#anti-patterns) for consolidated anti-patterns documentation.
 
 ## Summary
 

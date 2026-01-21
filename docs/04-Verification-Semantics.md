@@ -33,20 +33,20 @@ A `status: "verified"` response does not provide:
 
 - **Meaning**: Cryptographic verification and protocol-level enforcement succeeded
 - **Does not provide**: Authorization, trust, or policy compliance
-- **Required**: Additional security layers must be implemented before granting access
+- **External concerns**: Additional security layers are external to this service
 
 ### "rejected" Status
 
 - **Meaning**: Cryptographic verification failed OR protocol-level binding violation OR structural validation failed
 - **Reason field**: Provides specific failure reason
 
-## Usage Requirements
+## External Security Concerns
 
-Before granting access, you must implement:
+This service does not implement:
 
-1. Trust validation: Verify certificate chain, validate key source
-2. Authorization: Check user permissions, access control
-3. Policy enforcement: Validate bundle ID, team ID, environment
-4. Additional freshness checks: If required beyond 5-minute TTL
+1. Trust validation: Certificate chain verification, key source validation
+2. Authorization: User permissions, access control
+3. Policy enforcement: Bundle ID, team ID, environment validation
+4. Freshness validation: Replay protection beyond 5-minute challenge TTL
 
-See [Examples](./05-Examples.md) for usage patterns.
+See [Security Composition](./06-Security-Composition.md) for integration patterns.
