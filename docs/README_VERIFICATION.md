@@ -9,13 +9,7 @@
    - Anti-patterns
    - **Mandatory identity bindings (A, B, C, D)**
 
-2. **[VERIFICATION_PROMPTS.md](./VERIFICATION_PROMPTS.md)**
-   - Frontend and backend verification checklists
-   - Forbidden behaviors
-   - Required fingerprint logging
-   - **SIX_VALUES logging format**
-
-3. **[ASSERTION_DER_VERIFICATION_FAILURE.md](./ASSERTION_DER_VERIFICATION_FAILURE.md)**
+2. **[ASSERTION_DER_VERIFICATION_FAILURE.md](./ASSERTION_DER_VERIFICATION_FAILURE.md)**
    - Current verification approach (dual DIGEST attempts)
    - DER signature handling
    - MESSAGE vs DIGEST mode
@@ -28,32 +22,21 @@
    - Dual-attempt proof technique
    - The canonical rule
 
-## Implementation Guides
-
-5. **[FRONTEND_VERIFICATION_PROMPT.md](./FRONTEND_VERIFICATION_PROMPT.md)**
-   - Frontend implementation checklist
-
-6. **[BACKEND_VERIFICATION_PROMPT.md](./BACKEND_VERIFICATION_PROMPT.md)**
-   - Backend implementation checklist
-   - Endpoint specifications with flowID
-   - **Explicit binding checks**
-   - **SIX_VALUES logging requirements**
-
 ## Technical Details
 
-7. **[DER_SIGNATURE_LENGTH_VARIABILITY.md](./DER_SIGNATURE_LENGTH_VARIABILITY.md)**
+5. **[DER_SIGNATURE_LENGTH_VARIABILITY.md](./DER_SIGNATURE_LENGTH_VARIABILITY.md)**
    - Why DER signatures are variable length
    - ASN.1 INTEGER padding rules
 
-8. **[KEYSTORE_DEADLOCK_SIGTRAP.md](./KEYSTORE_DEADLOCK_SIGTRAP.md)**
+6. **[KEYSTORE_DEADLOCK_SIGTRAP.md](./KEYSTORE_DEADLOCK_SIGTRAP.md)**
    - Storage deadlock bug and fix
    - **Safe error handling (no fatal errors)**
 
-9. **[APP_ATTEST_CRYPTOKIT_DOUBLE_HASH_GOTCHA.md](./APP_ATTEST_CRYPTOKIT_DOUBLE_HASH_GOTCHA.md)**
+7. **[APP_ATTEST_CRYPTOKIT_DOUBLE_HASH_GOTCHA.md](./APP_ATTEST_CRYPTOKIT_DOUBLE_HASH_GOTCHA.md)**
    - MESSAGE vs DIGEST mode explanation
 
-10. **[APP_ATTEST_ASSERTION_DIGEST_CONSTRUCTION.md](./APP_ATTEST_ASSERTION_DIGEST_CONSTRUCTION.md)**
-    - clientDataHash re-hashing behavior
+8. **[APP_ATTEST_ASSERTION_DIGEST_CONSTRUCTION.md](./APP_ATTEST_ASSERTION_DIGEST_CONSTRUCTION.md)**
+   - clientDataHash re-hashing behavior
 
 ## The Complete Flow (Current Implementation)
 
@@ -135,8 +118,8 @@ These values **MUST** match the frontend's `SIX_VALUES` block byte-for-byte. If 
 
 1. Read `AppAttest-ClientDataHash.md` for the complete contract
 2. Review `ASSERTION_DER_VERIFICATION_FAILURE.md` for current verification approach
-3. Reference `VERIFICATION_PROMPTS.md` during code review
-4. Check `KEYSTORE_DEADLOCK_SIGTRAP.md` for concurrency safety
+3. Check `KEYSTORE_DEADLOCK_SIGTRAP.md` for concurrency safety
+4. See `docs/README.md` for the complete documentation index
 
 ## The Model (TL;DR)
 
