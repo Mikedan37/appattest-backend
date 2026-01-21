@@ -114,9 +114,9 @@ Or from network:
 
 | Test | Status | Notes |
 |------|--------|-------|
-| Health Check | ⬜ | |
-| Real Assertion | ⬜ | |
-| Tamper Detection | ⬜ | |
+| Health Check | Not Run | |
+| Real Assertion | Not Run | |
+| Tamper Detection | Not Run | |
 
 ### Detailed Results
 

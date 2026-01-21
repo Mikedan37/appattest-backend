@@ -99,19 +99,19 @@ Compare these between client and backend to identify mismatches.
 
 ## Common Mistakes
 
-❌ **Treating 64-byte signature as DER**
+**Treating 64-byte signature as DER**
 - Result: Verification always fails
-- Fix: Convert raw → DER
+- Fix: Convert raw to DER
 
-❌ **Hashing signedBytes before verification**
+**Hashing signedBytes before verification**
 - Result: Double-hashing (SHA256(SHA256(payload)))
 - Fix: Pass raw bytes, let CryptoKit hash
 
-❌ **Recomputing clientDataHash**
+**Recomputing clientDataHash**
 - Result: Different bytes than what Apple signed
 - Fix: Use exact bytes from request
 
-❌ **Wrong signedBytes construction**
+**Wrong signedBytes construction**
 - Result: Verifying wrong message
 - Fix: `authenticatorData || clientDataHash` only
 
