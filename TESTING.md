@@ -122,14 +122,14 @@ Or from network:
 
 #### Test 1: Health Check
 ```
-Status: ⬜ Not Run | ✅ Passed | ❌ Failed
+Status: Not Run | Passed | Failed
 
 Actual Response:
 ```
 
 #### Test 2: Real Assertion Verification
 ```
-Status: ⬜ Not Run | ✅ Passed | ❌ Failed
+Status: Not Run | Passed | Failed
 
 KeyID Used:
 Actual Response:
@@ -138,7 +138,7 @@ Issues:
 
 #### Test 3: Tamper Detection
 ```
-Status: ⬜ Not Run | ✅ Passed | ❌ Failed
+Status: Not Run | Passed | Failed
 
 Tamper Method:
 Actual Response:

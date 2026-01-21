@@ -365,9 +365,9 @@ We separated **thinking, building, and deploying**. That’s the whole game.
 
 | | |
 |--|--|
-| ✅ | Binary on disk is updated (newest code) |
-| ❌ | systemd keeps running the **old release** binary |
-| ❌ | No restart, no hash update, no invariant checks |
+| PASS | Binary on disk is updated (newest code) |
+| FAIL | systemd keeps running the **old release** binary |
+| FAIL | No restart, no hash update, no invariant checks |
 
 - **Run the binary by hand** after `build-fast` → you’re running the latest code.
 - **`curl` the server or check logs via systemd** → you are not. The service is still the old release.

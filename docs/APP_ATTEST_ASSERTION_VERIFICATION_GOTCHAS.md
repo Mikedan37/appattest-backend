@@ -26,7 +26,7 @@ ECDSA signatures can be encoded in two formats:
 ### Detection
 
 ```swift
-// ✅ CORRECT: Detect DER by first byte, parse accordingly
+// CORRECT: Detect DER by first byte, parse accordingly
 guard signatureDER.first == 0x30 else {
     throw AppAttestVerificationError.invalidSignatureFormat
 }
@@ -52,19 +52,19 @@ CryptoKit's `isValidSignature` has two overloads:
 ### The Double-Hashing Trap
 
 ```swift
-// ❌ WRONG: Causes double-hashing
+// WRONG: Causes double-hashing
 let signedBytes = authenticatorData + clientDataHash
 let digest = SHA256.hash(data: signedBytes)
 let isValid = publicKey.isValidSignature(signature, for: Data(digest))
-// CryptoKit hashes Data(digest) again → SHA256(SHA256(signedBytes)) → FAILS
+// CryptoKit hashes Data(digest) again -> SHA256(SHA256(signedBytes)) -> FAILS
 ```
 
 ```swift
-// ✅ CORRECT: DIGEST mode, no double-hashing
+// CORRECT: DIGEST mode, no double-hashing
 let signedBytes = authenticatorData + clientDataHash
 let digest = SHA256.hash(data: signedBytes)
 let isValid = publicKey.isValidSignature(signature, for: digest)
-// CryptoKit uses digest directly → SHA256(signedBytes) → SUCCEEDS
+// CryptoKit uses digest directly -> SHA256(signedBytes) -> SUCCEEDS
 ```
 
 **Rule**: Use DIGEST mode (`for: SHA256.Digest`). Never use MESSAGE mode (`for: Data`) during verification.

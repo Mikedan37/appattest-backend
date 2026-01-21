@@ -89,7 +89,7 @@ let messageDigest = SHA256.hash(data: signedBytes)
 let isValid = publicKey.isValidSignature(signatureDER, for: messageDigest)
 ```
 
-### ❌ Incorrect (Will Always Fail)
+### Incorrect (Will Always Fail)
 
 ```swift
 let signedBytes = authenticatorData + clientDataHashBytes
@@ -133,14 +133,14 @@ This is an empirically required construction for this implementation. Other impl
 If you see code that constructs `signedBytes` as:
 
 ```swift
-let signedBytes = authenticatorData + clientDataHashBytes  // ❌ WRONG
+let signedBytes = authenticatorData + clientDataHashBytes  // WRONG
 ```
 
 **STOP.** This is incorrect for this flow. It must be:
 
 ```swift
 let clientDataHashHashed = SHA256.hash(data: clientDataHashBytes)
-let signedBytes = authenticatorData + clientDataHashHashed  // ✅ CORRECT
+let signedBytes = authenticatorData + clientDataHashHashed  // CORRECT
 ```
 
 This is not optional. This is what end-to-end tests require.

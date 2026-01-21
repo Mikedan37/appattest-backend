@@ -60,7 +60,7 @@ App Attest already provides a digest (it signed `SHA256(message)`). If you pass 
 ### The Buggy Code
 
 ```swift
-// ❌ WRONG: Causes double-hashing
+// WRONG: Causes double-hashing
 let signedBytes = authenticatorData + SHA256.hash(data: clientDataHashBytes)
 let isValid = publicKey.isValidSignature(signature, for: signedBytes)
 ```
@@ -75,7 +75,7 @@ let isValid = publicKey.isValidSignature(signature, for: signedBytes)
 ### The Correct Code
 
 ```swift
-// ✅ CORRECT: No double-hashing
+// CORRECT: No double-hashing
 let signedBytes = authenticatorData + SHA256.hash(data: clientDataHashBytes)
 let messageDigest = SHA256.hash(data: signedBytes)
 let isValid = publicKey.isValidSignature(signature, for: messageDigest)

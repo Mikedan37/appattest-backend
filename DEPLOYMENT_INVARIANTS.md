@@ -185,7 +185,7 @@ This means the binary couldn't be read at startup (permissions issue?).
 
 The build finished. The new binary exists with a new hash. The deploy script stopped on purpose because it won't restart the service without `sudo`, and `sudo` couldn't read a password (e.g. non‑interactive or IDE-run). This is correct behavior. Annoying, but correct.
 
-**What actually happened:** `swift build` ✓, binary ✓, hash ✓, restart ✗ (sudo prompt). Nothing is broken. The binary is not wrong. This is not Swift being broken. ARM + Swift + crypto + release + systemd + sudo = character development.
+**What actually happened:** `swift build` passed, binary exists, hash computed, restart failed (sudo prompt). Nothing is broken. The binary is not wrong. This is not Swift being broken. ARM + Swift + crypto + release + systemd + sudo = character development.
 
 **Option A (recommended):** Re-run deploy. It will not rebuild (incremental, nothing changed). It will restart and update the hash. Enter your sudo password when prompted.
 

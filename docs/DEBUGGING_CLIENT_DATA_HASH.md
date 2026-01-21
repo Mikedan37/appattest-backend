@@ -121,22 +121,22 @@ echo ""
 
 # Check for required fields
 if echo "$RESPONSE" | grep -q '"clientDataHash"'; then
-    echo "✅ clientDataHash field present"
+    echo "PASS: clientDataHash field present"
 else
-    echo "❌ clientDataHash field MISSING"
+    echo "FAIL: clientDataHash field MISSING"
 fi
 
 if echo "$RESPONSE" | grep -q '"expiresAt"'; then
-    echo "✅ expiresAt field present"
+    echo "PASS: expiresAt field present"
 else
-    echo "❌ expiresAt field MISSING"
+    echo "FAIL: expiresAt field MISSING"
 fi
 
 # Validate JSON
 if echo "$RESPONSE" | python3 -m json.tool > /dev/null 2>&1; then
-    echo "✅ Valid JSON"
+    echo "PASS: Valid JSON"
 else
-    echo "❌ Invalid JSON"
+    echo "FAIL: Invalid JSON"
 fi
 ```
 

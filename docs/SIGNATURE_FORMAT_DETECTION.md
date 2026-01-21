@@ -37,7 +37,7 @@ This document describes the robust detection rules used in the backend verificat
 
 ## Forbidden Heuristics
 
-### ❌ NEVER: "First byte == 0x30 means DER"
+### NEVER: "First byte == 0x30 means DER"
 
 **Why this is unsafe:**
 - A RAW P1363 signature can start with `0x30` by coincidence

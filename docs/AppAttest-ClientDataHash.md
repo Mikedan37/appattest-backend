@@ -178,10 +178,10 @@ The frontend should log the same six values after assertion generation, before n
 ### Parity Check
 
 If all six values match byte-for-byte:
-- ✅ Transport integrity confirmed
-- ✅ Hash authority confirmed (backend issued, frontend used)
-- ✅ Signed bytes construction confirmed
-- ✅ Key continuity confirmed
+- Transport integrity confirmed
+- Hash authority confirmed (backend issued, frontend used)
+- Signed bytes construction confirmed
+- Key continuity confirmed
 
 If values don't match, it's an identity drift issue, not a cryptographic failure.
 
@@ -434,7 +434,7 @@ let publicKeyHex = publicKeyData.map { String(format: "%02x", $0) }.joined()
 
 ### Frontend Generating Hash
 ```swift
-// ❌ WRONG - Frontend must never do this
+// WRONG - Frontend must never do this
 let challenge = generateChallenge()
 let clientDataJSON = buildClientDataJSON(challenge: challenge)
 let clientDataHash = SHA256.hash(data: clientDataJSON)
@@ -444,7 +444,7 @@ generateAssertion(keyID, clientDataHash: clientDataHash)
 
 ### Backend Recomputing Hash at Verify Time
 ```swift
-// ❌ WRONG - Backend must use stored hash
+// WRONG - Backend must use stored hash
 let challenge = retrieveChallenge(keyID)  // WRONG - challenge not stored
 let clientDataJSON = buildClientDataJSON(challenge: challenge)
 let clientDataHash = SHA256.hash(data: clientDataJSON)  // WRONG - should use stored hash
@@ -453,7 +453,7 @@ let clientDataHash = SHA256.hash(data: clientDataJSON)  // WRONG - should use st
 
 ### Accepting Client-Provided Hash
 ```swift
-// ❌ WRONG - Backend must never accept hash from client
+// WRONG - Backend must never accept hash from client
 struct VerifyRequest {
     let keyID: String
     let assertionObject: String
@@ -464,7 +464,7 @@ struct VerifyRequest {
 
 ### Using Different flowID Across Endpoints
 ```swift
-// ❌ WRONG - flowID must be reused
+// WRONG - flowID must be reused
 let flowID1 = register()  // Returns flowID: "ABC-123"
 let hash = clientDataHash(flowID: "XYZ-789")  // WRONG - different flowID
 verify(flowID: "XYZ-789")  // WRONG - binding violation
@@ -473,7 +473,7 @@ verify(flowID: "XYZ-789")  // WRONG - binding violation
 
 ### Attempting Verification Before Binding Checks
 ```swift
-// ❌ WRONG - Check bindings first
+// WRONG - Check bindings first
 let isValid = verifySignature(...)  // WRONG - check bindings first
 if storedFlowID != requestFlowID { ... }  // Too late
 ```

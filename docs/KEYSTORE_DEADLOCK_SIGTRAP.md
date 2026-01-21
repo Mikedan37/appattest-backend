@@ -5,13 +5,13 @@
 Nested synchronization in `KeyStore.storePublicKey()` causes deadlock:
 
 ```swift
-// ❌ WRONG: Nested sync causes deadlock
+// WRONG: Nested sync causes deadlock
 func storePublicKey(...) {
     keyStoreQueue.sync {
         keyStore[storageKey] = entry
         
         // This calls getPublicKey() which also does keyStoreQueue.sync
-        // → Deadlock: serial queue cannot re-enter itself
+        // -> Deadlock: serial queue cannot re-enter itself
         guard let (key, flowID) = getPublicKey(...) else { ... }
     }
 }
@@ -28,14 +28,14 @@ func getPublicKey(...) {
 1. `storePublicKey()` acquires `keyStoreQueue.sync`
 2. Inside that sync block, it calls `getPublicKey()`
 3. `getPublicKey()` tries to acquire `keyStoreQueue.sync` again
-4. Serial queues cannot re-enter themselves → deadlock
-5. Watchdog/systemd detects hang → kills process with `SIGTRAP`
-6. Service restarts → keys lost → iOS sees connection errors
+4. Serial queues cannot re-enter themselves -> deadlock
+5. Watchdog/systemd detects hang -> kills process with `SIGTRAP`
+6. Service restarts -> keys lost -> iOS sees connection errors
 
 ## Solution: Direct Dictionary Access
 
 ```swift
-// ✅ CORRECT: Access dictionary directly while already synchronized
+// CORRECT: Access dictionary directly while already synchronized
 func storePublicKey(...) {
     keyStoreQueue.sync {
         keyStore[storageKey] = entry
@@ -99,19 +99,19 @@ All locking methods (`getPublicKey()`, `getAllStorageKeys()`) call `assertNotOnK
 
 ## Related Patterns to Avoid
 
-### ❌ Don't Do This
+### Don't Do This
 
 ```swift
 keyStoreQueue.sync {
     // Calling another method that syncs
-    let keys = getAllStorageKeys()  // ← Deadlock!
+    let keys = getAllStorageKeys()  // <- Deadlock!
     
     // Calling helper that syncs
-    let key = getPublicKey(...)  // ← Deadlock!
+    let key = getPublicKey(...)  // <- Deadlock!
 }
 ```
 
-### ✅ Do This Instead
+### Do This Instead
 
 ```swift
 keyStoreQueue.sync {
