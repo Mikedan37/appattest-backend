@@ -4,14 +4,11 @@ This document describes the deployment safety system that prevents "wrong binary
 
 ## Problem Statement
 
-Without deployment invariants, you can:
-- Edit source code
-- Run `swift build`
-- See "build succeeded"
-- Restart the service
-- Debug logs from a different binary than the code you're reading
-
-This is a **DevOps footgun**, not a coding bug.
+Without deployment invariants:
+- Source code can be edited
+- `swift build` can claim success
+- Service can be restarted
+- Logs can come from a different binary than the source code
 
 ## Solution: Hard Invariants
 
@@ -132,26 +129,19 @@ cat .deployed_binary_hash
 sha256sum .build/aarch64-unknown-linux-gnu/release/AppAttestBackend
 ```
 
-## Why This Prevents "Wrong Binary Running"
+## How This Prevents "Wrong Binary Running"
 
-**Before (broken):**
-1. Edit code
-2. `swift build` (fails silently or builds wrong target)
-3. `sudo systemctl restart` (restarts old binary)
-4. Debug logs from wrong binary
-5. Confusion and wasted time
-
-**After (fixed):**
-1. Edit code
-2. `./scripts/deploy.sh`
+The deployment process:
+1. Edits code
+2. Runs `./scripts/deploy.sh`
 3. Script verifies build succeeded
 4. Script verifies binary exists
 5. Script checks hash changed
 6. Only then restarts service
 7. Service logs its own hash on startup
-8. You can verify logs match binary
+8. Logs can be verified to match binary
 
-**If any step fails, you know immediately and the service doesn't restart.**
+If any step fails, deployment aborts and the service does not restart.
 
 ## Systemd Configuration
 
@@ -216,12 +206,6 @@ Hashes should line up. If they don't, stop and fix.
 
 **Optional, later:** To avoid prompts when running deploy from scripts or CI, add passwordless `sudo` for this service only. Not urgent.
 
-## Future Improvements
-
-- Add build timestamp to binary (compile-time constant)
-- Add git commit hash to binary (compile-time constant)
-- Add automated tests that verify binary identity matches source
-- Add CI/CD integration that enforces these invariants
 
 ## Summary
 

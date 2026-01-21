@@ -1,8 +1,8 @@
-# Current Backend Implementation (2026-01-17)
+# Backend Implementation
 
 ## Overview
 
-This document describes the current state of the App Attest backend implementation, including all recent updates for safe error handling, identity bindings, and SIX_VALUES logging.
+This document describes the App Attest backend implementation, including error handling, identity bindings, and logging.
 
 ## Complete Flow
 
@@ -44,10 +44,9 @@ This document describes the current state of the App Attest backend implementati
 8. Returns `flowID` to frontend
 
 **Idempotency:**
-- **Idempotent:** Multiple REGISTER requests with the same `keyID` and `attestationObject` are allowed
-- **Behavior:** If a public key already exists for `(keyID, flowID)`, the existing entry is preserved
-- **New flowID:** Each REGISTER request generates a new `flowID`, even for the same `keyID`
-- **Use case:** Allows re-registration after backend restart or for testing
+- Multiple REGISTER requests with the same `keyID` and `attestationObject` are allowed
+- If a public key already exists for `(keyID, flowID)`, the existing entry is preserved
+- Each REGISTER request generates a new `flowID`, even for the same `keyID`
 
 **Storage Key Format:**
 ```
@@ -101,14 +100,13 @@ Where `keyIDHex` is lowercase hex of raw 32-byte keyID.
 **Storage Key Format:** Same as REGISTER (`"\(keyIDHex):\(flowID)"`)
 
 **Idempotency:**
-- **Write-once immutable:** Each `(keyID, flowID)` pair can have exactly one `clientDataHash`
-- **Strict enforcement:** If a `clientDataHash` already exists for `(keyID, flowID)`, the request is rejected with `409 Conflict`
-- **Rationale:** Ensures one hash per flow, preventing hash swapping attacks and maintaining replay protection
-- **Error:** `409 Conflict` with reason indicating write-once immutable violation
+- Each `(keyID, flowID)` pair can have exactly one `clientDataHash`
+- If a `clientDataHash` already exists for `(keyID, flowID)`, the request is rejected with `409 Conflict`
+- Ensures one hash per flow, preventing hash swapping attacks and maintaining replay protection
 
 **Error Handling:**
 - `400 Bad Request`: Invalid keyID format, missing flowID
-- `409 Conflict`: clientDataHash already exists for `(keyID, flowID)` (write-once immutable - each `(keyID, flowID)` pair can have exactly one hash)
+- `409 Conflict`: clientDataHash already exists for `(keyID, flowID)`
 - `500 Internal Server Error`: Hash generation failed
 
 ### 3. VERIFY Endpoint
@@ -140,7 +138,7 @@ Where `keyIDHex` is lowercase hex of raw 32-byte keyID.
    - Validates `flowID` is not empty (rejects if empty)
    - Decodes `assertionObject` from base64
 
-2. **Enforce Identity Bindings (BEFORE Verification):**
+2. **Enforce Identity Bindings:**
    
    **Binding A: flowID ↔ keyID**
    - Loads stored public key for `(keyID, flowID)`
@@ -162,8 +160,8 @@ Where `keyIDHex` is lowercase hex of raw 32-byte keyID.
 
 3. **If Any Binding Fails:**
    - Reject immediately with explicit reason
-   - Do NOT attempt cryptographic verification
-   - Do NOT return generic "DER verification failed"
+   - Do not attempt cryptographic verification
+   - Do not return generic "DER verification failed"
 
 4. **Decode Assertion:**
    - Decodes assertion CBOR map (0xa2)
@@ -214,17 +212,17 @@ Where `keyIDHex` is lowercase hex of raw 32-byte keyID.
    - Return `{"status": "verified"}`
 
 8. **On Failure:**
-   - Do NOT consume hash (allow retry with new hash)
+   - Do not consume hash (allow retry with new hash)
    - Return `{"status": "rejected", "reason": "..."}`
 
 ## Error Handling
 
-### Safe Error Handling (No Crashes)
+### Safe Error Handling
 
-- **No `fatalError`:** All fatal errors replaced with logging and error returns
-- **No `precondition`:** All preconditions replaced with `guard` statements returning errors
-- **Explicit reasons:** All rejections include a `reason` field
-- **Binding violations:** Reject immediately, do NOT attempt verification
+- No `fatalError`: All fatal errors replaced with logging and error returns
+- No `precondition`: All preconditions replaced with `guard` statements returning errors
+- Explicit reasons: All rejections include a `reason` field
+- Binding violations: Reject immediately, do not attempt verification
 
 ### Error Response Format
 
@@ -297,10 +295,7 @@ The verifier performs two attempts using DIGEST mode:
 
 Both use: `publicKey.isValidSignature(signature, for: SHA256.Digest)`
 
-**Why DIGEST mode:**
-- Eliminates double-hashing confusion
-- Makes the exact digest being verified explicit
-- If both attempts fail, it's an identity mismatch, not a hashing issue
+DIGEST mode is used to make the exact digest being verified explicit. If both attempts fail, the issue is identity mismatch, not hashing semantics.
 
 ## Logging
 
@@ -335,9 +330,9 @@ This enables key lineage verification at VERIFY time.
 
 ### KeyStore Deadlock Prevention
 
-- **No nested sync:** Direct dictionary access within sync blocks
-- **Debug guardrail:** `DispatchSpecificKey` detects re-entrancy in DEBUG builds
-- **Safe error handling:** Logs errors instead of crashing
+- No nested sync: Direct dictionary access within sync blocks
+- Debug guardrail: `DispatchSpecificKey` detects re-entrancy in DEBUG builds
+- Safe error handling: Logs errors instead of crashing
 
 ### ClientDataHashStore
 
@@ -373,12 +368,12 @@ This enables key lineage verification at VERIFY time.
 
 ### Verification Checklist
 
-- ✅ All bindings checked before verification
-- ✅ SIX_VALUES logged for every verify request
-- ✅ Dual DIGEST attempts performed
-- ✅ No fatal errors or crashes
-- ✅ Explicit rejection reasons
-- ✅ Key lineage verified (REGISTER → VERIFY)
+- All bindings checked before verification
+- SIX_VALUES logged for every verify request
+- Dual DIGEST attempts performed
+- No fatal errors or crashes
+- Explicit rejection reasons
+- Key lineage verified (REGISTER → VERIFY)
 
 ## Production Considerations
 
@@ -397,24 +392,10 @@ In production environments, consider redacting sensitive values from logs:
 - Redact full hex/base64 representations of keys and signatures
 - Log redaction should be configurable via environment variable
 
-**Example redaction policy:**
-```swift
-#if PRODUCTION
-let publicKeyHex = publicKeyData.prefix(8).map { String(format: "%02x", $0) }.joined() + "...[REDACTED]"
-#else
-let publicKeyHex = publicKeyData.map { String(format: "%02x", $0) }.joined()
-#endif
-```
-
 ## Related Documentation
 
 - `docs/README_VERIFICATION.md` - Documentation index
 - `docs/AppAttest-ClientDataHash.md` - Complete authority contract
 - `docs/ASSERTION_DER_VERIFICATION_FAILURE.md` - Verification approach
 - `docs/APP_ATTEST_ASSERTION_VERIFICATION_GOTCHAS.md` - Common pitfalls
-- `docs/KEYSTORE_DEADLOCK_SIGTRAP.md` - Deadlock bug and fix
-
----
-
-**Last Updated:** 2026-01-17  
-**Status:** Production-ready with safe error handling and comprehensive logging
+- `docs/KEYSTORE_DEADLOCK_SIGTRAP.md` - Deadlock prevention

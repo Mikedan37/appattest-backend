@@ -1,12 +1,6 @@
-# Assertion DER Verification Failure
+# Assertion Verification Approach
 
-## Summary
-
-App Attest assertion verification was failing with "DER signature verification failed" even though frontend and backend fingerprints for `authenticatorData`, `clientDataHash`, and `signedBytes_sha256` matched exactly.
-
-**Current status:** Implementing dual verification attempts (A and B) using DIGEST mode to prove which signing theory is correct. Once we determine which attempt succeeds, we'll consolidate to a single canonical path.
-
-## Why DER vs Raw Signatures is a Common Bug
+## Signature Formats
 
 ECDSA signatures can be encoded in two formats:
 
@@ -20,28 +14,21 @@ ECDSA signatures can be encoded in two formats:
    - No ASN.1 structure
    - Used by some crypto libraries and test code
 
-### Why This Causes Bugs
-
-- **Apple frameworks hide DER parsing**: `SecKeyVerifySignature` handles DER internally, so iOS developers rarely see it
-- **Backend engineers rarely parse ASN.1 manually**: Most assume "signature = 64 bytes" or "signature = 70 bytes"
-- **Variable length is unexpected**: DER length depends on INTEGER padding, not just the signature values
-- **API confusion**: CryptoKit has separate initializers for DER vs raw, and using the wrong one fails silently
-
-## Why MESSAGE vs DIGEST Mode Matters
+## Verification Modes
 
 CryptoKit's `isValidSignature` has two overloads:
 
 1. **MESSAGE mode**: `isValidSignature(_:for: Data)`
    - CryptoKit hashes the message internally with SHA256
-   - Use when the signer also hashed internally (App Attest)
+   - Used when the signer also hashed internally
 
 2. **DIGEST mode**: `isValidSignature(_:for: SHA256.Digest)`
    - CryptoKit uses the digest directly (no hashing)
-   - Use when the signer signed a pre-computed digest (WebAuthn)
+   - Used when the signer signed a pre-computed digest
 
-### Current Approach: Dual Verification to Prove Signing Theory
+## Dual Verification Approach
 
-We're currently testing two signing theories using DIGEST mode (to eliminate hashing confusion):
+The verifier performs two verification attempts using DIGEST mode:
 
 **Attempt A (no re-hash):**
 ```swift
@@ -58,18 +45,13 @@ let digestB = SHA256.hash(data: signedBytesB)
 let isValidB = publicKey.isValidSignature(signature, for: digestB)
 ```
 
-**Why DIGEST mode during debugging:**
-- Eliminates double-hashing confusion
-- Makes the exact digest being verified explicit
-- If both attempts fail, it's not a hashing semantics issue - it's identity (wrong key/clientDataHash/bytes)
+Verification succeeds if either attempt succeeds.
 
-Once we determine which attempt succeeds, we'll consolidate to a single canonical path.
+DIGEST mode is used to make the exact digest being verified explicit. If both attempts fail, the issue is identity mismatch (wrong key/clientDataHash/bytes), not hashing semantics.
 
-## The Exact Canonical Rule We Enforce
+## Canonical Verification Function
 
-### Single Verification Function
-
-All App Attest verification must use:
+All App Attest verification uses:
 
 ```swift
 func verifyAssertion(
@@ -81,24 +63,18 @@ func verifyAssertion(
 ) throws -> Bool
 ```
 
-### Hard Requirements
+## Requirements
 
-1. **Signature must be DER**: If signature starts with `0x30`, it MUST use `derRepresentation` initializer
-2. **Public key from X9.63**: `P256.Signing.PublicKey(x963Representation:)` (65 bytes, `0x04` prefix)
-3. **Dual verification during debugging**: Test both signing theories using DIGEST mode to prove which is correct
-4. **Once proven**: Consolidate to single canonical path based on which attempt succeeds
+1. **Signature format**: If signature starts with `0x30`, it uses `derRepresentation` initializer
+2. **Public key format**: `P256.Signing.PublicKey(x963Representation:)` (65 bytes, `0x04` prefix)
+3. **Dual verification**: Both signing theories are tested using DIGEST mode
+4. **Signature format validation**: If signature starts with `0x30` but doesn't parse as DER, verification fails
+5. **DER only**: No "try both DER and raw" fallbacks - DER is required
 
-### Guardrails
-
-- **DIGEST mode during debugging**: Use DIGEST mode to eliminate hashing confusion and prove which signing theory is correct
-- **Signature format**: If signature starts with `0x30` but doesn't parse as DER, fail loudly
-- **DER only**: No "try both DER and raw" fallbacks - DER is required
-- **If both attempts fail**: It's not a hashing issue - it's identity (wrong key/clientDataHash/bytes)
-
-## How This Prevents Regressions
+## Regression Prevention
 
 1. **Single canonical function**: All verification goes through one function
-2. **Hard guardrails**: Compile-time and runtime checks prevent wrong API usage
+2. **Compile-time and runtime checks**: Prevent wrong API usage
 3. **Explicit logging**: `VERIFICATION_DUAL_ATTEMPT` block shows both attempts with all intermediate values
 4. **No fallbacks**: If DER parsing fails, verification fails - no silent fallback to raw
 
@@ -109,11 +85,6 @@ func verifyAssertion(
 
 ## Related Documentation
 
-- `docs/APP_ATTEST_CRYPTOKIT_DOUBLE_HASH_GOTCHA.md` - Double-hashing bug details
-- `docs/DER_SIGNATURE_LENGTH_VARIABILITY.md` - Why DER lengths vary
-- `docs/KEYSTORE_DEADLOCK_SIGTRAP.md` - Storage deadlock bug
-
----
-
-**Date:** 2026-01-17  
-**Status:** In progress - dual verification to determine correct signing theory
+- `docs/APP_ATTEST_CRYPTOKIT_DOUBLE_HASH_GOTCHA.md` - MESSAGE vs DIGEST mode details
+- `docs/DER_SIGNATURE_LENGTH_VARIABILITY.md` - DER length variability
+- `docs/KEYSTORE_DEADLOCK_SIGTRAP.md` - Storage concurrency safety

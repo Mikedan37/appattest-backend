@@ -76,7 +76,7 @@ Apple-generated App Attest signatures are valid and verify correctly on Apple pl
 - All byte-level fingerprints can match while verification still fails
 - This project treats Linux verification as *best-effort*
 
-### Recommended Usage
+### Platform Considerations
 
 For production systems requiring authoritative verification:
 
@@ -87,24 +87,17 @@ Linux support is retained for research, inspection, and protocol-level validatio
 
 ## ECDSA High-S / Low-S Signature Normalization
 
-### The Problem
+### Signature Malleability
 
-ECDSA signatures have **signature malleability**: for any valid signature `(r, s)`, the signature `(r, n - s)` is also valid (where `n` is the curve order). This means every message has two valid signatures.
+ECDSA signatures have signature malleability: for any valid signature `(r, s)`, the signature `(r, n - s)` is also valid (where `n` is the curve order). This means every message has two valid signatures.
 
 Some cryptographic implementations (including CryptoKit/SwiftCrypto on Linux) reject "high-S" signatures (where `s > n/2`) to prevent signature malleability attacks. This is a security best practice recommended by BIP-62 and adopted by Bitcoin Core.
 
-**Symptoms:**
-- All cryptographic inputs match byte-for-byte (authenticatorData, clientDataHash, signedBytes, nonce, publicKey)
-- Both SwiftCrypto and OpenSSL verification fail with `ECDSA_VERIFY_FAILED`
-- Signature DER parses correctly
-- No other errors in logs
+Apple devices may generate signatures with `s > n/2` (high-S). The backend normalizes these signatures to low-S before verification.
 
-**Root Cause:**
-Apple devices may generate signatures with `s > n/2` (high-S). The backend's strict verification rejects these signatures even though they are cryptographically valid.
+### Normalization Process
 
-### The Solution
-
-The backend now **normalizes all ECDSA signatures to low-S** before verification:
+The backend normalizes all ECDSA signatures to low-S before verification:
 
 1. **Parse DER signature** to extract `r` and `s` values
 2. **Compare `s` with `n/2`** (half the curve order)
@@ -139,7 +132,7 @@ The backend logs canonicalization results:
 - `s_normalized_hex`: Normalized s value (if changed)
 - `was_high_s`: Boolean indicating if normalization occurred
 
-### Why This Works
+### Normalization Properties
 
 Normalizing to low-S ensures:
 - **Consistency**: All signatures are in canonical form

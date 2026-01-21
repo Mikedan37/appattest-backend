@@ -1,76 +1,20 @@
-# How This Prevents "Wrong Binary Running" Bugs
+# Deployment System
 
-## The Problem You Just Solved
+The deployment system enforces invariants that prevent running a binary that doesn't match the source code.
 
-You were debugging code that didn't match the running binary. This happens when:
+## Deployment Invariants
 
-1. **Source code** - You edit `main.swift`, add logging, fix error handling
-2. **Build system** - SwiftPM builds tests, fails silently, or produces partial artifacts
-3. **Service** - systemd restarts using a stale binary from yesterday
-4. **Debugging** - You read logs from a binary that doesn't match your source code
+The deployment system enforces these rules:
 
-**Result:** Hours wasted debugging the wrong thing.
+1. **Build must succeed** - If `swift build` fails, service does not restart
+2. **Binary must exist** - If build claims success but no binary exists, deployment aborts
+3. **Binary hash must change** - If hash unchanged, service does not restart
+4. **Service logs binary identity** - Every startup logs exe_path, SHA256, timestamp
+5. **No silent failures** - Any invariant violation aborts loudly
 
-## The Solution: Deployment Invariants
+## Deploy Script Flow
 
-### Invariant 1: Build Must Succeed
-
-**Before:** `swift build` could fail, but you'd still restart the service.
-
-**After:** Deploy script checks exit code. If build fails, script aborts and service doesn't restart.
-
-```bash
-if ! swift build -c release --product AppAttestBackend; then
-    echo "FATAL: Build failed. Service will NOT restart."
-    exit 1
-fi
-```
-
-### Invariant 2: Binary Must Exist
-
-**Before:** SwiftPM could claim "success" but not produce a binary (common with test failures).
-
-**After:** Deploy script verifies binary exists and is executable.
-
-```bash
-if [ ! -f "$BIN_PATH" ]; then
-    echo "FATAL: Binary not found at $BIN_PATH"
-    exit 1
-fi
-```
-
-### Invariant 3: Binary Hash Must Change
-
-**Before:** You'd restart the service even if nothing changed, wasting time.
-
-**After:** Deploy script compares SHA256 to last deployed hash. If unchanged, service doesn't restart.
-
-```bash
-if [ "$NEW_HASH" = "$OLD_HASH" ]; then
-    echo "WARNING: Binary hash unchanged. Service will NOT restart."
-    exit 0
-fi
-```
-
-### Invariant 4: Service Logs Binary Identity
-
-**Before:** You had no way to verify which binary was running.
-
-**After:** Every startup logs:
-- `exe_path` - Full path to binary
-- `binary_sha256` - SHA256 hash of the binary
-- `binary_timestamp` - File modification time
-- `binary_size_bytes` - File size
-
-**You can now grep logs to verify the running binary matches your source.**
-
-### Invariant 5: No Silent Failures
-
-**Before:** Build could fail silently, service could restart with wrong binary, no one would know.
-
-**After:** Every step fails loudly. If anything goes wrong, you know immediately.
-
-## The Deploy Script Flow
+The deploy script (`scripts/deploy.sh`) performs these steps:
 
 ```
 1. Clean build directory
@@ -92,9 +36,22 @@ fi
 SUCCESS
 ```
 
-**At every step, if something fails, the script aborts and the service remains untouched.**
+If any step fails, the script aborts and the service remains untouched.
 
-## How to Use
+## Binary Identity Logging
+
+The backend logs binary identity on every startup:
+
+```
+CANARY routes configured
+  exe_path: /home/orangepi/Developer/appattest-backend/.build/.../AppAttestBackend
+  binary_sha256: <64-char hex>
+  binary_timestamp: <ISO8601>
+  binary_size_bytes: <size>
+  process_start_time: <ISO8601>
+```
+
+## Usage
 
 ### Normal Deployment
 
@@ -103,7 +60,7 @@ cd /home/orangepi/Developer/appattest-backend
 ./scripts/deploy.sh
 ```
 
-**This is the ONLY way you should deploy.** It enforces all invariants.
+The script builds if needed, only restarts if binary changed, and logs all operations.
 
 ### Verify Running Binary
 
@@ -121,63 +78,73 @@ cat .deployed_binary_hash
 sha256sum .build/aarch64-unknown-linux-gnu/release/AppAttestBackend
 ```
 
-**If hashes match, you're running the binary you think you are.**
+If hashes match, the running binary matches the source code.
 
-## Why This Works
+## Systemd Configuration
 
-### Before (Broken)
+The systemd service uses a wrapper script (`scripts/orangepi_run.sh`) that:
+- Verifies binary exists before starting
+- Does not build (build is manual via deploy script)
+- Executes the binary directly
 
+This ensures systemd never runs a stale or missing binary.
+
+## Troubleshooting
+
+### "Binary hash unchanged"
+
+The code has not changed, or the build did not rebuild.
+
+**Solution:** If restart is needed, delete `.deployed_binary_hash` and run deploy script again.
+
+### "Build failed"
+
+Check build output for errors. The deploy script shows the last 30 lines.
+
+**Solution:** Fix compilation errors, then run deploy script again.
+
+### "Service not running after restart"
+
+Check service status:
+```bash
+sudo systemctl status appattest-backend
 ```
-You: Edit code
-You: swift build
-SwiftPM: (builds tests, fails, but you don't notice)
-You: sudo systemctl restart
-Systemd: (restarts old binary from yesterday)
-You: Check logs
-Logs: (from old binary, doesn't match your code)
-You: "Why isn't my fix working?"
+
+**Solution:** Check logs for startup errors. The deploy script shows service status.
+
+### "Binary identity missing in logs"
+
+The binary could not be read at startup (permissions issue).
+
+**Solution:** Check file permissions on the binary. The service must be able to read its own executable.
+
+### Build succeeded but deploy stopped at "sudo: a password is required"
+
+The build finished. The new binary exists with a new hash. The deploy script stopped because it requires `sudo` to restart the service, and `sudo` could not read a password (non-interactive or IDE-run).
+
+**Option A (recommended):** Re-run deploy. It will not rebuild (incremental, nothing changed). It will restart and update the hash. Enter your sudo password when prompted.
+
+```bash
+cd /home/orangepi/Developer/appattest-backend
+SKIP_CLEAN=1 ./scripts/deploy.sh
 ```
 
-### After (Fixed)
+**Option B (manual):** Restart and verify yourself:
 
-```
-You: Edit code
-You: ./scripts/deploy.sh
-Script: swift build -c release --product AppAttestBackend
-Script: (build succeeds, binary exists)
-Script: (hash changed, restarting service)
-Service: (starts, logs binary_sha256)
-You: Check logs
-Logs: (binary_sha256 matches your source)
-You: "Everything works!"
+```bash
+sudo systemctl restart appattest-backend
+curl http://localhost:8080/health
+sudo journalctl -u appattest-backend -n 10 | grep CANARY
 ```
 
-## The Key Insight
-
-**You don't need CI/CD to prevent this bug.**
-
-**You need deployment invariants.**
-
-The deploy script is a **guardrail**, not a pipeline. It prevents you from deploying the wrong thing, even if you forget to check manually.
-
-## What This Doesn't Do
-
-This system does NOT:
-- Run tests (that's separate)
-- Deploy to multiple servers (single-node only)
-- Integrate with CI/CD (local-only)
-- Handle rollbacks (manual only)
-
-**It only guarantees: if the binary hash didn't change, the service doesn't restart.**
+Hashes should match. If they don't, stop and fix.
 
 ## Summary
 
-**The invariant:** Binary hash must change for service to restart.
+**The invariant:** If the binary hash did not change, the service does not restart.
 
 **The enforcement:** Deploy script checks hash before restart.
 
 **The proof:** Service logs its own hash on startup.
 
-**The result:** You can never debug the wrong binary again.
-
-This is **DevOps hygiene**, not CI/CD. It's the foundation that makes everything else possible.
+**The result:** The running binary matches the source code.
